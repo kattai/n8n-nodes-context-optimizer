@@ -368,7 +368,7 @@ Implementação seguirá TDD. Cada etapa deverá manter testes existentes aprova
 ## 20. Implementation TODO
 
 - [x] Criar Fingerprint Registry persistente sem conteúdo bruto.
-- [ ] Criar Cache Policy Engine e matriz de estratégias.
+- [x] Criar Cache Policy Engine e matriz de estratégias.
 - [ ] Adicionar configuração cache-aware ao Token Saver Chat Model.
 - [ ] Integrar decisões ao wrapper sem alterar prefixos obrigatórios.
 - [ ] Ampliar telemetria e custo cache-aware.
