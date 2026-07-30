@@ -6,6 +6,7 @@ import { dirname, join, resolve, sep } from 'node:path';
 import { assertCacheFingerprint, createCacheFingerprint } from './fingerprint';
 import type {
 	FingerprintRecord,
+	FingerprintRegistry,
 	FingerprintRegistryOptions,
 	ObserveFingerprintInput,
 } from './types';
@@ -25,7 +26,7 @@ function validateInteger(name: string, value: number): void {
 	}
 }
 
-export class FileSystemFingerprintRegistry {
+export class FileSystemFingerprintRegistry implements FingerprintRegistry {
 	private readonly root: string;
 
 	private readonly ttlMilliseconds: number;
@@ -158,6 +159,27 @@ export class FileSystemFingerprintRegistry {
 				return undefined;
 			}
 			return record;
+		});
+	}
+
+	async recordProviderCache(
+		fingerprints: string[],
+		cachedTokens: number,
+		now = new Date(),
+	): Promise<void> {
+		await this.enqueue(async () => {
+			if (!Number.isFinite(cachedTokens) || cachedTokens < 0) {
+				throw new Error('cachedTokens must be zero or greater');
+			}
+			for (const fingerprint of [...new Set(fingerprints)]) {
+				assertCacheFingerprint(fingerprint);
+				const record = await this.readRecord(fingerprint);
+				if (!record || Date.parse(record.expiresAt) <= now.getTime()) continue;
+				await this.writeAtomic(this.path(fingerprint), {
+					...record,
+					lastProviderCachedTokens: cachedTokens,
+				});
+			}
 		});
 	}
 

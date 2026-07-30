@@ -36,7 +36,7 @@ export function decideCacheAction(input: CachePolicyInput): CachePolicyDecision 
 	}
 
 	const largeCommonPrefix =
-		input.inCommonPrefix && input.estimatedTokens >= input.minimumStablePrefixTokens;
+		input.inCommonPrefix && input.commonPrefixTokens >= input.minimumStablePrefixTokens;
 	const providerCacheEvidence =
 		largeCommonPrefix &&
 		input.volatility !== 'variable' &&

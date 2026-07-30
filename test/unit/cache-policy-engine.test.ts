@@ -8,6 +8,7 @@ function block(overrides: Partial<CachePolicyInput> = {}): CachePolicyInput {
 		profile: 'balanced',
 		kind: 'old_history',
 		estimatedTokens: 4_000,
+		commonPrefixTokens: 4_000,
 		inCommonPrefix: true,
 		volatility: 'unknown',
 		eligible: true,

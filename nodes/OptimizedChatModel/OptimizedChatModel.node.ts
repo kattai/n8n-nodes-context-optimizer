@@ -4,7 +4,11 @@ import { NodeConnectionTypes, NodeOperationError } from 'n8n-workflow';
 import type { CustomProfileConfig, OptimizerProfileName } from '../../src/core/types';
 import { recordModelTelemetry } from '../../src/analytics/model-telemetry-registry';
 import { extractProviderUsage } from '../../src/analytics/provider-usage';
-import { defaultFingerprintDirectory } from '../../src/cache/fingerprint-registry';
+import {
+	defaultFingerprintDirectory,
+	FileSystemFingerprintRegistry,
+} from '../../src/cache/fingerprint-registry';
+import { resolveNodeCacheStrategy } from '../../src/cache/node-options';
 import {
 	defaultStorageDirectory,
 	FileSystemResourceStore,
@@ -23,6 +27,14 @@ interface MaximumSavingsNodeOptions {
 	storageDirectory?: string;
 	targetPreviewPercent?: number;
 	ttlHours?: number;
+}
+
+interface CacheNodeOptions {
+	fingerprintDirectory?: string;
+	fingerprintTtlHours?: number;
+	maximumFingerprints?: number;
+	minimumRepetitions?: number;
+	minimumStablePrefixTokens?: number;
 }
 
 function normalizedDirectory(value: string): string {
@@ -414,6 +426,14 @@ export class OptimizedChatModel implements INodeType {
 			itemIndex,
 			{},
 		) as MaximumSavingsNodeOptions;
+		const cacheOptions = this.getNodeParameter(
+			'cacheOptions',
+			itemIndex,
+			{},
+		) as CacheNodeOptions;
+		const cacheStrategy = resolveNodeCacheStrategy(
+			this.getNode().parameters as Record<string, unknown>,
+		);
 		const workflowId = this.getWorkflow().id ?? 'workflow';
 		const scope =
 			connectedScope(maximumSavingsOptions.scope, workflowId) ?? workflowId;
@@ -430,12 +450,39 @@ export class OptimizedChatModel implements INodeType {
 			maximumPreviewPercent,
 			Math.max(10, maximumSavingsOptions.targetPreviewPercent ?? 20),
 		);
+		const fingerprintDirectory =
+			cacheOptions.fingerprintDirectory?.trim() || defaultFingerprintDirectory();
+		const modelName =
+			(model as { constructor?: { name?: string } }).constructor?.name ?? 'model';
+		const cacheScope = `${workflowId}:${this.getNode().name}:${modelName}`;
 
 		return {
 			response: wrapLanguageModel(model as object, {
 				profile,
 				custom,
 				optimizeMessages: behavior !== 'measureOnly',
+				...(behavior !== 'measureOnly'
+					? {
+							cacheAware: {
+								strategy: cacheStrategy,
+								...(cacheStrategy !== 'ignore_cache_signals'
+									? {
+											registry: new FileSystemFingerprintRegistry(
+												fingerprintDirectory,
+												{
+													ttlHours: cacheOptions.fingerprintTtlHours ?? 24,
+													maxEntries: cacheOptions.maximumFingerprints ?? 5000,
+												},
+											),
+										}
+									: {}),
+								scope: cacheScope,
+								minimumRepetitions: cacheOptions.minimumRepetitions ?? 2,
+								minimumStablePrefixTokens:
+									cacheOptions.minimumStablePrefixTokens ?? 2048,
+							},
+						}
+					: {}),
 				...(profile === 'aggressive' && behavior !== 'measureOnly'
 					? {
 							maximumSavings: {

@@ -4,6 +4,14 @@ import { extractProtectedFacts } from '../core/protected-facts';
 import { resolveProfile } from '../core/profiles';
 import { estimateTokens } from '../core/token-estimator';
 import type { OptimizeContextOptions } from '../core/types';
+import { extractProviderUsage } from '../analytics/provider-usage';
+import { decideCacheAction } from '../cache/policy-engine';
+import type {
+	CacheBlockKind,
+	CacheBlockVolatility,
+	CacheStrategy,
+} from '../cache/policy-types';
+import type { FingerprintRegistry } from '../cache/types';
 import {
 	type MaximumSavingsFallbackReason,
 	type MaximumSavingsOptions,
@@ -62,11 +70,21 @@ export interface LanguageModelWrapperOptions extends OptimizeContextOptions {
 	observer?: ModelInvocationObserver;
 	optimizeMessages?: boolean;
 	maximumSavings?: MaximumSavingsOptions;
+	cacheAware?: CacheAwareModelOptions;
+}
+
+export interface CacheAwareModelOptions {
+	strategy: CacheStrategy;
+	registry?: FingerprintRegistry;
+	scope: string;
+	minimumRepetitions: number;
+	minimumStablePrefixTokens: number;
 }
 
 interface OptimizedModelInput {
 	input: unknown;
 	metrics: Omit<ModelOptimizationMetrics, 'operation'>;
+	cacheFingerprints: string[];
 }
 
 function messageText(message: MessageLike): string {
@@ -89,6 +107,15 @@ interface OptimizedMessages {
 	messages: unknown[];
 	bypassReason?: ModelBypassReason;
 	toolMetrics?: ToolOptimizationMetrics;
+	cacheFingerprints?: string[];
+}
+
+interface MessageEntry {
+	message: unknown;
+	index: number;
+	role: string;
+	text: string;
+	hasToolData: boolean;
 }
 
 interface ToolOptimizationMetrics {
@@ -193,6 +220,93 @@ function taskText(messages: unknown[]): string {
 			}
 		});
 	return [user ? messageText(user) : '', ...toolCalls].filter(Boolean).join('\n');
+}
+
+function isUserCorrection(entry: MessageEntry): boolean {
+	if (entry.role !== 'user') return false;
+	return /(?:^|\b)(?:corre[cç][aã]o|corrigindo|na verdade|quis dizer|actually|correction|i meant)(?:\b|:)/i.test(
+		entry.text,
+	);
+}
+
+function cacheBlockKind(
+	entry: MessageEntry,
+	latestMessageIndex: number,
+	recentWindowStart: number,
+): CacheBlockKind {
+	if (entry.role === 'system') return 'system_prompt';
+	if (entry.index === latestMessageIndex) return 'current_message';
+	if (isUserCorrection(entry)) return 'user_correction';
+	if (entry.index >= recentWindowStart) return 'recent_history';
+	return 'old_history';
+}
+
+function blockVolatility(kind: CacheBlockKind): CacheBlockVolatility {
+	if (kind === 'system_prompt' || kind === 'tool_schema' || kind === 'protected_content') {
+		return 'stable';
+	}
+	if (kind === 'tool_output' || kind === 'external_data' || kind === 'logs') {
+		return 'variable';
+	}
+	return 'unknown';
+}
+
+async function applyCachePolicy(
+	entries: MessageEntry[],
+	structurallyProtected: Set<number>,
+	recentWindowStart: number,
+	options: LanguageModelWrapperOptions,
+): Promise<{ protectedIndexes: Set<number>; fingerprints: string[] }> {
+	const cache = options.cacheAware;
+	if (!cache || cache.strategy === 'ignore_cache_signals') {
+		return { protectedIndexes: new Set(), fingerprints: [] };
+	}
+
+	const protectedIndexes = new Set<number>();
+	const fingerprints: string[] = [];
+	const latestMessageIndex = entries.length - 1;
+	let commonPrefixTokens = 0;
+	for (const entry of entries) {
+		const estimatedTokens = estimateTokens(entry.text);
+		commonPrefixTokens += estimatedTokens;
+		const inCommonPrefix = entry.index < latestMessageIndex;
+		const kind = cacheBlockKind(entry, latestMessageIndex, recentWindowStart);
+		const mandatory = structurallyProtected.has(entry.index) || isUserCorrection(entry);
+		let fingerprint:
+			| { seenCount: number; lastProviderCachedTokens?: number }
+			| undefined;
+		if (inCommonPrefix && entry.text && cache.registry) {
+			try {
+				const observed = await cache.registry.observe({
+					scope: cache.scope,
+					position: `messages[${entry.index}].content`,
+					content: entry.text,
+					estimatedTokens,
+				});
+				fingerprints.push(observed.fingerprint);
+				fingerprint = observed;
+			} catch {
+				// Cache metadata must never break a provider request.
+			}
+		}
+		const selected = decideCacheAction({
+			strategy: cache.strategy,
+			profile: options.profile ?? 'balanced',
+			kind,
+			estimatedTokens,
+			commonPrefixTokens,
+			inCommonPrefix,
+			volatility: blockVolatility(kind),
+			eligible: Boolean(entry.text),
+			mandatory,
+			virtualizationReady: false,
+			minimumRepetitions: cache.minimumRepetitions,
+			minimumStablePrefixTokens: cache.minimumStablePrefixTokens,
+			fingerprint,
+		});
+		if (selected.action === 'preserve') protectedIndexes.add(entry.index);
+	}
+	return { protectedIndexes, fingerprints };
 }
 
 function emptyToolMetrics(
@@ -329,7 +443,7 @@ async function optimizeMessages(
 	}
 
 	const profile = resolveProfile(options.profile ?? 'balanced', options.custom);
-	const entries = messages.map((message, index) => {
+	const entries: MessageEntry[] = messages.map((message, index) => {
 		const value = message as MessageLike;
 		return {
 			message,
@@ -354,6 +468,13 @@ async function optimizeMessages(
 			)
 			.map((entry) => entry.index),
 	);
+	const cachePolicy = await applyCachePolicy(
+		entries,
+		structurallyProtected,
+		recentWindowStart,
+		options,
+	);
+	for (const index of cachePolicy.protectedIndexes) structurallyProtected.add(index);
 	const acceptedRegularIndexes = new Set<number>();
 	const acceptedRegularTexts = deduplicateUnits(
 		entries
@@ -379,9 +500,15 @@ async function optimizeMessages(
 	});
 
 	if (kept.length === 0 && entries.length > 0) {
-		return { messages: [entries[entries.length - 1].message] };
+		return {
+			messages: [entries[entries.length - 1].message],
+			cacheFingerprints: cachePolicy.fingerprints,
+		};
 	}
-	return { messages: kept.map((entry) => entry.message) };
+	return {
+		messages: kept.map((entry) => entry.message),
+		cacheFingerprints: cachePolicy.fingerprints,
+	};
 }
 
 function optimizationMetrics(
@@ -457,6 +584,7 @@ async function optimizeModelInput(
 		return {
 			input,
 			metrics: optimizationMetrics(messages, messages, options),
+			cacheFingerprints: [],
 		};
 	}
 	if (Array.isArray(input)) {
@@ -470,6 +598,7 @@ async function optimizeModelInput(
 				optimized.bypassReason,
 				optimized.toolMetrics,
 			),
+			cacheFingerprints: optimized.cacheFingerprints ?? [],
 		};
 	}
 	if (
@@ -489,22 +618,44 @@ async function optimizeModelInput(
 				optimized.bypassReason,
 				optimized.toolMetrics,
 			),
+			cacheFingerprints: optimized.cacheFingerprints ?? [],
 		};
 	}
 	const singleton = input === undefined || input === null ? [] : [input];
-	return { input, metrics: optimizationMetrics(singleton, singleton, options) };
+	return {
+		input,
+		metrics: optimizationMetrics(singleton, singleton, options),
+		cacheFingerprints: [],
+	};
+}
+
+async function recordProviderCacheEvidence(
+	cache: CacheAwareModelOptions | undefined,
+	fingerprints: string[],
+	response: unknown,
+): Promise<void> {
+	if (!cache?.registry || fingerprints.length === 0) return;
+	const cachedTokens = extractProviderUsage(response).cachedInputTokens;
+	if (!cachedTokens) return;
+	try {
+		await cache.registry.recordProviderCache(fingerprints, cachedTokens);
+	} catch {
+		// Provider response remains valid even if local cache metadata is unavailable.
+	}
 }
 
 async function observedCall(
 	operation: ModelOptimizationMetrics['operation'],
 	optimized: OptimizedModelInput,
 	observer: ModelInvocationObserver | undefined,
+	cache: CacheAwareModelOptions | undefined,
 	call: () => Promise<unknown>,
 ): Promise<unknown> {
 	const metrics = { operation, ...optimized.metrics };
 	const traceId = observer?.onStart?.(metrics);
 	try {
 		const response = await call();
+		await recordProviderCacheEvidence(cache, optimized.cacheFingerprints, response);
 		observer?.onSuccess?.(traceId, response, metrics);
 		return response;
 	} catch (error) {
@@ -527,7 +678,7 @@ export function wrapLanguageModel<T extends object>(
 			if (property === 'invoke' && typeof current.invoke === 'function') {
 				return async (input: unknown, ...args: unknown[]) => {
 					const optimized = await optimizeModelInput(input, options);
-					return await observedCall('invoke', optimized, observer, async () =>
+					return await observedCall('invoke', optimized, observer, options.cacheAware, async () =>
 						current.invoke?.(optimized.input, ...args),
 					);
 				};
@@ -539,6 +690,7 @@ export function wrapLanguageModel<T extends object>(
 					);
 					const combined: OptimizedModelInput = {
 						input: optimized.map((entry) => entry.input),
+						cacheFingerprints: optimized.flatMap((entry) => entry.cacheFingerprints),
 						metrics: optimizationMetrics(
 							inputs.flatMap((input) => (Array.isArray(input) ? input : [input])),
 							optimized.flatMap((entry) =>
@@ -549,7 +701,7 @@ export function wrapLanguageModel<T extends object>(
 							combineToolMetrics(optimized.map((entry) => entry.metrics)),
 						),
 					};
-					return await observedCall('batch', combined, observer, async () =>
+					return await observedCall('batch', combined, observer, options.cacheAware, async () =>
 						current.batch?.(combined.input as unknown[], ...args),
 					);
 				};
@@ -566,6 +718,11 @@ export function wrapLanguageModel<T extends object>(
 							typeof response !== 'object' ||
 							!(Symbol.asyncIterator in response)
 						) {
+							await recordProviderCacheEvidence(
+								options.cacheAware,
+								optimized.cacheFingerprints,
+								response,
+							);
 							observer?.onSuccess?.(traceId, response, metrics);
 							return response;
 						}
@@ -577,6 +734,11 @@ export function wrapLanguageModel<T extends object>(
 									lastChunk = chunk;
 									yield chunk;
 								}
+								await recordProviderCacheEvidence(
+									options.cacheAware,
+									optimized.cacheFingerprints,
+									lastChunk,
+								);
 								observer?.onSuccess?.(traceId, lastChunk, metrics);
 							} catch (error) {
 								observer?.onError?.(traceId, error, metrics);
@@ -615,6 +777,9 @@ export function wrapLanguageModel<T extends object>(
 						: [optimizedMessages];
 					const optimized: OptimizedModelInput = {
 						input: optimizedMessages,
+						cacheFingerprints: Array.isArray(optimizedGroups)
+							? optimizedGroups.flatMap((entry) => entry.cacheFingerprints ?? [])
+							: [],
 						metrics: optimizationMetrics(
 							beforeFlat,
 							afterFlat,
@@ -631,7 +796,7 @@ export function wrapLanguageModel<T extends object>(
 								: undefined,
 						),
 					};
-					return observedCall('generate', optimized, observer, async () =>
+					return observedCall('generate', optimized, observer, options.cacheAware, async () =>
 						current.generate?.(optimized.input, ...args),
 					);
 				};

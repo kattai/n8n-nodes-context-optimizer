@@ -31,6 +31,7 @@ export interface CachePolicyInput {
 	profile: OptimizerProfileName;
 	kind: CacheBlockKind;
 	estimatedTokens: number;
+	commonPrefixTokens: number;
 	inCommonPrefix: boolean;
 	volatility: CacheBlockVolatility;
 	eligible: boolean;

@@ -76,6 +76,21 @@ describe('FileSystemFingerprintRegistry', () => {
 		expect(stored?.seenCount).toBe(20);
 	});
 
+	it('records provider cache evidence without incrementing repetition counts', async () => {
+		const registry = new FileSystemFingerprintRegistry(await temporaryDirectory());
+		const observed = await registry.observe({
+			scope: 'scope',
+			position: 'messages[0].content',
+			content: 'stable provider prefix',
+			estimatedTokens: 2_500,
+		});
+
+		await registry.recordProviderCache([observed.fingerprint], 2_200);
+		const updated = await registry.get(observed.fingerprint);
+
+		expect(updated).toMatchObject({ seenCount: 1, lastProviderCachedTokens: 2_200 });
+	});
+
 	it('expires records and purges only the configured batch', async () => {
 		const registry = new FileSystemFingerprintRegistry(await temporaryDirectory(), {
 			ttlHours: 1,

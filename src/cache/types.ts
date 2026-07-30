@@ -26,3 +26,10 @@ export interface FingerprintRegistryOptions {
 	maxEntries?: number;
 	purgeLimit?: number;
 }
+
+export interface FingerprintRegistry {
+	observe(input: ObserveFingerprintInput, now?: Date): Promise<FingerprintRecord>;
+	get(fingerprint: string, now?: Date): Promise<FingerprintRecord | undefined>;
+	recordProviderCache(fingerprints: string[], cachedTokens: number, now?: Date): Promise<void>;
+	purgeExpired(now?: Date): Promise<number>;
+}
