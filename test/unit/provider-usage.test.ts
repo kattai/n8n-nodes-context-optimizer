@@ -40,4 +40,21 @@ describe('provider usage normalization', () => {
 	it('returns unavailable without inventing usage', () => {
 		expect(extractProviderUsage({ content: 'ok' })).toEqual({ available: false });
 	});
+
+	it.each([
+		[
+			'OpenAI nested details',
+			{ usage_metadata: { input_tokens: 500, input_token_details: { cached_tokens: 320 } } },
+		],
+		[
+			'Anthropic cache read',
+			{ response_metadata: { usage: { input_tokens: 500, cache_read_input_tokens: 330 } } },
+		],
+		[
+			'Gemini cached content',
+			{ response_metadata: { usageMetadata: { promptTokenCount: 500, cachedContentTokenCount: 340 } } },
+		],
+	])('extracts cached input from %s', (_name, response) => {
+		expect(extractProviderUsage(response).cachedInputTokens).toBeGreaterThanOrEqual(320);
+	});
 });

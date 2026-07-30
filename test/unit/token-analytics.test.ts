@@ -5,6 +5,7 @@ import {
 	compareRuns,
 	normalizeMeasurement,
 } from '../../src/analytics/token-analytics';
+import { analysisOutput } from '../../src/output/format-node-output';
 
 describe('token analytics', () => {
 	it('calculates gross and net savings without hiding overhead', () => {
@@ -116,11 +117,95 @@ describe('token analytics', () => {
 		expect(result.actual).toEqual({
 			available: true,
 			inputTokens: 391,
+			regularInputTokens: 391,
+			cachedInputTokens: 0,
 			outputTokens: 28,
 			reasoningTokens: 101,
 			totalTokens: 520,
 			billableOutputTokens: 129,
+			cacheUsageAvailable: false,
 		});
+		expect(result.measurementConfidence).toBe('provider_partial');
+	});
+
+	it('reports actual regular and cached input with provider confidence', () => {
+		const result = analyzeTokens({
+			optimization: {
+				tokensBeforeEstimated: 10_000,
+				tokensAfterEstimated: 5_000,
+				cacheStrategy: 'automatic_hybrid',
+				cacheDecision: 'hybrid',
+				stablePrefixTokens: 2_000,
+				dynamicTokensBefore: 8_000,
+				dynamicTokensAfter: 3_000,
+			},
+			providerUsage: {
+				inputTokens: 4_800,
+				cachedInputTokens: 3_100,
+				outputTokens: 200,
+				totalTokens: 5_000,
+				available: true,
+			},
+		});
+
+		expect(result.actual.regularInputTokens).toBe(1_700);
+		expect(result.actual.cachedInputTokens).toBe(3_100);
+		expect(result.actual.cacheUsageAvailable).toBe(true);
+		expect(result.measurementConfidence).toBe('provider_actual');
+		expect(analysisOutput(result)).toMatchObject({
+			tokenUsage: {
+				regularInput: 1_700,
+				cachedInput: 3_100,
+				output: 200,
+				cache: 'measured',
+			},
+			measurementConfidence: 'provider_actual',
+			cacheOptimization: {
+				strategy: 'automatic_hybrid',
+				decision: 'hybrid',
+				stablePrefix: 2_000,
+				dynamicBefore: 8_000,
+				dynamicAfter: 3_000,
+			},
+		});
+	});
+
+	it('does not report money until at least one explicit price is configured', () => {
+		const result = analyzeTokens(
+			{ original: 1_000, sent: 500 },
+			{
+				inputPerMillion: 0,
+				cachedInputPerMillion: 0,
+				outputPerMillion: 0,
+				reasoningPerMillion: 0,
+				currency: 'USD',
+			},
+		);
+		expect(result.cost).toBeUndefined();
+		expect(result.measurementConfidence).toBe('optimizer_estimate');
+	});
+
+	it('prices reasoning separately when the user supplies a reasoning price', () => {
+		const result = analyzeTokens(
+			{
+				providerUsage: {
+					inputTokens: 1_000_000,
+					outputTokens: 200_000,
+					reasoningTokens: 50_000,
+					totalTokens: 1_200_000,
+					available: true,
+				},
+			},
+			{
+				inputPerMillion: 1,
+				cachedInputPerMillion: 0.1,
+				outputPerMillion: 2,
+				reasoningPerMillion: 4,
+				currency: 'USD',
+			},
+		);
+
+		expect(result.cost?.after).toBe(1.5);
 	});
 
 	it('compares A/B input tokens using provider usage when both runs expose it', () => {

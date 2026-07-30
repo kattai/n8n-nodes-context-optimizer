@@ -31,6 +31,24 @@ function percentage(before: number, after: number): number {
 	return Number((((before - after) / before) * 100).toFixed(2));
 }
 
+function mergeCacheDecision(
+	left: ModelOptimizationMetrics['cacheDecision'] | undefined,
+	right: ModelOptimizationMetrics['cacheDecision'] | undefined,
+): ModelOptimizationMetrics['cacheDecision'] {
+	if (!left && !right) return 'legacy_profile_only';
+	if (!left) return right ?? 'legacy_profile_only';
+	if (!right) return left;
+	if (left === 'hybrid' || right === 'hybrid') return 'hybrid';
+	if (
+		(left === 'preserve_stable_prefix' && right === 'reduce_dynamic_blocks') ||
+		(left === 'reduce_dynamic_blocks' && right === 'preserve_stable_prefix')
+	) {
+		return 'hybrid';
+	}
+	if (right !== 'no_change') return right;
+	return left;
+}
+
 function mergeRecords(
 	previous: ModelTelemetryRecord,
 	current: ModelTelemetryRecord,
@@ -74,6 +92,25 @@ function mergeRecords(
 					previous.optimization.targetNotReachedReason,
 			storageFallbackUsed:
 				previous.optimization.storageFallbackUsed || current.optimization.storageFallbackUsed,
+			cacheDecision: mergeCacheDecision(
+				previous.optimization.cacheDecision,
+				current.optimization.cacheDecision,
+			),
+			cacheRegistryScope:
+				current.optimization.cacheRegistryScope ??
+				previous.optimization.cacheRegistryScope ??
+				'disabled',
+			cacheWarning:
+				current.optimization.cacheWarning ?? previous.optimization.cacheWarning,
+			stablePrefixTokens:
+				(previous.optimization.stablePrefixTokens ?? 0) +
+				(current.optimization.stablePrefixTokens ?? 0),
+			dynamicTokensBefore:
+				(previous.optimization.dynamicTokensBefore ?? 0) +
+				(current.optimization.dynamicTokensBefore ?? 0),
+			dynamicTokensAfter:
+				(previous.optimization.dynamicTokensAfter ?? 0) +
+				(current.optimization.dynamicTokensAfter ?? 0),
 			bypassReason:
 				current.optimization.bypassReason ?? previous.optimization.bypassReason,
 		},

@@ -371,7 +371,7 @@ Implementação seguirá TDD. Cada etapa deverá manter testes existentes aprova
 - [x] Criar Cache Policy Engine e matriz de estratégias.
 - [x] Adicionar configuração cache-aware ao Token Saver Chat Model.
 - [x] Integrar decisões ao wrapper sem alterar prefixos obrigatórios.
-- [ ] Ampliar telemetria e custo cache-aware.
+- [x] Ampliar telemetria e custo cache-aware.
 - [ ] Validar compatibilidade legada de workflows `0.5.2`.
 - [ ] Executar benchmarks universais frios e quentes.
 - [ ] Publicar e instalar pacote `0.6.0` localmente.

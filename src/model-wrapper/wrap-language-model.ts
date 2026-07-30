@@ -57,6 +57,18 @@ export interface ModelOptimizationMetrics {
 	targetBandReached: boolean;
 	targetNotReachedReason?: MaximumSavingsFallbackReason | 'virtualization_not_configured';
 	storageFallbackUsed: boolean;
+	cacheStrategy: CacheStrategy;
+	cacheDecision:
+		| 'legacy_profile_only'
+		| 'preserve_stable_prefix'
+		| 'reduce_dynamic_blocks'
+		| 'hybrid'
+		| 'no_change';
+	stablePrefixTokens: number;
+	dynamicTokensBefore: number;
+	dynamicTokensAfter: number;
+	cacheRegistryScope: 'disabled' | 'process_local' | 'worker_local';
+	cacheWarning?: 'queue_mode_local_registry';
 	bypassReason?: ModelBypassReason;
 }
 
@@ -79,12 +91,14 @@ export interface CacheAwareModelOptions {
 	scope: string;
 	minimumRepetitions: number;
 	minimumStablePrefixTokens: number;
+	registryScope?: 'process_local' | 'worker_local';
 }
 
 interface OptimizedModelInput {
 	input: unknown;
 	metrics: Omit<ModelOptimizationMetrics, 'operation'>;
 	cacheFingerprints: string[];
+	cacheMetrics: CacheOptimizationMetrics;
 }
 
 function messageText(message: MessageLike): string {
@@ -108,6 +122,13 @@ interface OptimizedMessages {
 	bypassReason?: ModelBypassReason;
 	toolMetrics?: ToolOptimizationMetrics;
 	cacheFingerprints?: string[];
+	cacheMetrics?: CacheOptimizationMetrics;
+}
+
+interface CacheOptimizationMetrics {
+	stablePrefixTokens: number;
+	dynamicTokensBefore: number;
+	dynamicTokensAfter: number;
 }
 
 interface MessageEntry {
@@ -256,14 +277,26 @@ async function applyCachePolicy(
 	structurallyProtected: Set<number>,
 	recentWindowStart: number,
 	options: LanguageModelWrapperOptions,
-): Promise<{ protectedIndexes: Set<number>; fingerprints: string[] }> {
+): Promise<{
+	protectedIndexes: Set<number>;
+	fingerprints: string[];
+	stablePrefixTokens: number;
+	dynamicIndexes: Set<number>;
+}> {
 	const cache = options.cacheAware;
 	if (!cache || cache.strategy === 'ignore_cache_signals') {
-		return { protectedIndexes: new Set(), fingerprints: [] };
+		return {
+			protectedIndexes: new Set(),
+			fingerprints: [],
+			stablePrefixTokens: 0,
+			dynamicIndexes: new Set(),
+		};
 	}
 
 	const protectedIndexes = new Set<number>();
 	const fingerprints: string[] = [];
+	const dynamicIndexes = new Set<number>();
+	let stablePrefixTokens = 0;
 	const latestMessageIndex = entries.length - 1;
 	let commonPrefixTokens = 0;
 	for (const entry of entries) {
@@ -305,8 +338,19 @@ async function applyCachePolicy(
 			fingerprint,
 		});
 		if (selected.action === 'preserve') protectedIndexes.add(entry.index);
+		if (
+			selected.action === 'preserve' &&
+			[
+				'provider_cache_evidence',
+				'stable_repeated_prefix',
+				'large_common_prefix',
+			].includes(selected.reason)
+		) {
+			stablePrefixTokens += estimatedTokens;
+		}
+		if (selected.action !== 'preserve') dynamicIndexes.add(entry.index);
 	}
-	return { protectedIndexes, fingerprints };
+	return { protectedIndexes, fingerprints, stablePrefixTokens, dynamicIndexes };
 }
 
 function emptyToolMetrics(
@@ -321,6 +365,25 @@ function emptyToolMetrics(
 		...(reason ? { targetNotReachedReason: reason } : {}),
 		storageFallbackUsed: false,
 	};
+}
+
+function emptyCacheMetrics(): CacheOptimizationMetrics {
+	return {
+		stablePrefixTokens: 0,
+		dynamicTokensBefore: 0,
+		dynamicTokensAfter: 0,
+	};
+}
+
+function combineCacheMetrics(metrics: CacheOptimizationMetrics[]): CacheOptimizationMetrics {
+	return metrics.reduce(
+		(combined, current) => ({
+			stablePrefixTokens: combined.stablePrefixTokens + current.stablePrefixTokens,
+			dynamicTokensBefore: combined.dynamicTokensBefore + current.dynamicTokensBefore,
+			dynamicTokensAfter: combined.dynamicTokensAfter + current.dynamicTokensAfter,
+		}),
+		emptyCacheMetrics(),
+	);
 }
 
 function combineToolMetrics(
@@ -503,11 +566,29 @@ async function optimizeMessages(
 		return {
 			messages: [entries[entries.length - 1].message],
 			cacheFingerprints: cachePolicy.fingerprints,
+			cacheMetrics: {
+				stablePrefixTokens: cachePolicy.stablePrefixTokens,
+				dynamicTokensBefore: entries
+					.filter((entry) => cachePolicy.dynamicIndexes.has(entry.index))
+					.reduce((total, entry) => total + estimateTokens(entry.text), 0),
+				dynamicTokensAfter: cachePolicy.dynamicIndexes.has(entries.length - 1)
+					? estimateTokens(entries[entries.length - 1].text)
+					: 0,
+			},
 		};
 	}
 	return {
 		messages: kept.map((entry) => entry.message),
 		cacheFingerprints: cachePolicy.fingerprints,
+		cacheMetrics: {
+			stablePrefixTokens: cachePolicy.stablePrefixTokens,
+			dynamicTokensBefore: entries
+				.filter((entry) => cachePolicy.dynamicIndexes.has(entry.index))
+				.reduce((total, entry) => total + estimateTokens(entry.text), 0),
+			dynamicTokensAfter: kept
+				.filter((entry) => cachePolicy.dynamicIndexes.has(entry.index))
+				.reduce((total, entry) => total + estimateTokens(entry.text), 0),
+		},
 	};
 }
 
@@ -517,12 +598,32 @@ function optimizationMetrics(
 	options: OptimizeContextOptions,
 	bypassReason?: ModelBypassReason,
 	toolMetrics = emptyToolMetrics(),
+	cacheMetrics = emptyCacheMetrics(),
 ): Omit<ModelOptimizationMetrics, 'operation'> {
 	const beforeText = before.map((message) => messageText(message as MessageLike)).join('\n');
 	const afterText = after.map((message) => messageText(message as MessageLike)).join('\n');
 	const tokensBeforeEstimated = estimateTokens(beforeText);
 	const tokensAfterEstimated = estimateTokens(afterText);
 	const savingsTokensEstimated = Math.max(0, tokensBeforeEstimated - tokensAfterEstimated);
+	const stablePrefixTokens = cacheMetrics.stablePrefixTokens;
+	const dynamicTokensBefore =
+		cacheMetrics.dynamicTokensBefore + toolMetrics.eligibleTokensBefore;
+	const dynamicTokensAfter =
+		cacheMetrics.dynamicTokensAfter + toolMetrics.eligibleTokensAfter;
+	const cacheStrategy =
+		'cacheAware' in options && (options as LanguageModelWrapperOptions).cacheAware
+			? (options as LanguageModelWrapperOptions).cacheAware?.strategy ?? 'ignore_cache_signals'
+			: 'ignore_cache_signals';
+	const cacheDecision =
+		cacheStrategy === 'ignore_cache_signals'
+			? 'legacy_profile_only'
+			: stablePrefixTokens > 0 && dynamicTokensAfter < dynamicTokensBefore
+				? 'hybrid'
+				: stablePrefixTokens > 0
+					? 'preserve_stable_prefix'
+					: dynamicTokensAfter < dynamicTokensBefore
+						? 'reduce_dynamic_blocks'
+						: 'no_change';
 	return {
 		profile:
 			'optimizeMessages' in options &&
@@ -559,6 +660,19 @@ function optimizationMetrics(
 			? { targetNotReachedReason: toolMetrics.targetNotReachedReason }
 			: {}),
 		storageFallbackUsed: toolMetrics.storageFallbackUsed,
+		cacheStrategy,
+		cacheDecision,
+		stablePrefixTokens,
+		dynamicTokensBefore,
+		dynamicTokensAfter,
+		cacheRegistryScope:
+			cacheStrategy === 'ignore_cache_signals'
+				? 'disabled'
+				: ((options as LanguageModelWrapperOptions).cacheAware?.registryScope ??
+					'process_local'),
+		...((options as LanguageModelWrapperOptions).cacheAware?.registryScope === 'worker_local'
+			? { cacheWarning: 'queue_mode_local_registry' as const }
+			: {}),
 		...(bypassReason ? { bypassReason } : {}),
 	};
 }
@@ -585,6 +699,7 @@ async function optimizeModelInput(
 			input,
 			metrics: optimizationMetrics(messages, messages, options),
 			cacheFingerprints: [],
+			cacheMetrics: emptyCacheMetrics(),
 		};
 	}
 	if (Array.isArray(input)) {
@@ -597,8 +712,10 @@ async function optimizeModelInput(
 				options,
 				optimized.bypassReason,
 				optimized.toolMetrics,
+				optimized.cacheMetrics,
 			),
 			cacheFingerprints: optimized.cacheFingerprints ?? [],
+			cacheMetrics: optimized.cacheMetrics ?? emptyCacheMetrics(),
 		};
 	}
 	if (
@@ -617,8 +734,10 @@ async function optimizeModelInput(
 				options,
 				optimized.bypassReason,
 				optimized.toolMetrics,
+				optimized.cacheMetrics,
 			),
 			cacheFingerprints: optimized.cacheFingerprints ?? [],
+			cacheMetrics: optimized.cacheMetrics ?? emptyCacheMetrics(),
 		};
 	}
 	const singleton = input === undefined || input === null ? [] : [input];
@@ -626,6 +745,7 @@ async function optimizeModelInput(
 		input,
 		metrics: optimizationMetrics(singleton, singleton, options),
 		cacheFingerprints: [],
+		cacheMetrics: emptyCacheMetrics(),
 	};
 }
 
@@ -691,6 +811,7 @@ export function wrapLanguageModel<T extends object>(
 					const combined: OptimizedModelInput = {
 						input: optimized.map((entry) => entry.input),
 						cacheFingerprints: optimized.flatMap((entry) => entry.cacheFingerprints),
+						cacheMetrics: combineCacheMetrics(optimized.map((entry) => entry.cacheMetrics)),
 						metrics: optimizationMetrics(
 							inputs.flatMap((input) => (Array.isArray(input) ? input : [input])),
 							optimized.flatMap((entry) =>
@@ -699,6 +820,7 @@ export function wrapLanguageModel<T extends object>(
 							options,
 							undefined,
 							combineToolMetrics(optimized.map((entry) => entry.metrics)),
+							combineCacheMetrics(optimized.map((entry) => entry.cacheMetrics)),
 						),
 					};
 					return await observedCall('batch', combined, observer, options.cacheAware, async () =>
@@ -780,6 +902,11 @@ export function wrapLanguageModel<T extends object>(
 						cacheFingerprints: Array.isArray(optimizedGroups)
 							? optimizedGroups.flatMap((entry) => entry.cacheFingerprints ?? [])
 							: [],
+						cacheMetrics: Array.isArray(optimizedGroups)
+							? combineCacheMetrics(
+									optimizedGroups.map((entry) => entry.cacheMetrics ?? emptyCacheMetrics()),
+								)
+							: emptyCacheMetrics(),
 						metrics: optimizationMetrics(
 							beforeFlat,
 							afterFlat,
@@ -792,6 +919,11 @@ export function wrapLanguageModel<T extends object>(
 										optimizedGroups
 											.map((entry) => entry.toolMetrics)
 											.filter((entry): entry is ToolOptimizationMetrics => Boolean(entry)),
+									)
+								: undefined,
+							Array.isArray(optimizedGroups)
+								? combineCacheMetrics(
+										optimizedGroups.map((entry) => entry.cacheMetrics ?? emptyCacheMetrics()),
 									)
 								: undefined,
 						),

@@ -63,6 +63,7 @@ function fromUsage(usage: Record<string, unknown>): ProviderUsageTelemetry | und
 			'cachedTokens',
 			'cachedContentTokenCount',
 			'cacheReadInputTokens',
+			'cache_read_input_tokens',
 		]) ??
 		(inputDetails
 			? numeric(inputDetails, ['cache_read', 'cacheRead', 'cached_tokens'])

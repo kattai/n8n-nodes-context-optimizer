@@ -139,9 +139,37 @@ export function analysisOutput(analysis: TokenAnalysis): Record<string, unknown>
 			after,
 			saved,
 			percent: percent(saved, before),
-			measurement: 'estimated',
+			measurement: analysis.actual.available ? 'provider' : 'estimated',
 			qualityPassed: analysis.measurement.qualityGuardFailures === 0,
 		} satisfies TokenSavingsSummary,
+		tokenUsage: {
+			inputSent: after,
+			regularInput: analysis.actual.regularInputTokens,
+			cachedInput: analysis.actual.cachedInputTokens,
+			output: analysis.actual.available
+				? analysis.actual.outputTokens
+				: analysis.measurement.output,
+			reasoning: analysis.actual.reasoningTokens,
+			retrieved: analysis.measurement.retrieved,
+			cache: analysis.actual.available
+				? analysis.actual.cacheUsageAvailable
+					? 'measured'
+					: 'unknown'
+				: 'not_reported',
+		},
+		measurementConfidence: analysis.measurementConfidence,
+		...(analysis.measurement.cacheStrategy
+			? {
+					cacheOptimization: {
+						strategy: analysis.measurement.cacheStrategy,
+						decision: analysis.measurement.cacheDecision ?? 'unknown',
+						stablePrefix: analysis.measurement.stablePrefixTokens,
+						dynamicBefore: analysis.measurement.dynamicTokensBefore,
+						dynamicAfter: analysis.measurement.dynamicTokensAfter,
+					},
+				}
+			: {}),
+		...(analysis.cost ? { cost: analysis.cost } : {}),
 	};
 }
 

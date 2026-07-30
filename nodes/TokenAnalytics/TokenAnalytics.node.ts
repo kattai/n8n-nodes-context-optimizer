@@ -171,6 +171,16 @@ export class TokenAnalytics implements INodeType {
 				description: 'Provider price for one million output tokens',
 			},
 			{
+				displayName: 'Reasoning Price per 1M Tokens',
+				name: 'reasoningPrice',
+				type: 'number',
+				typeOptions: { minValue: 0, numberPrecision: 8 },
+				default: 0,
+				displayOptions: { show: { operation: ['estimateCost'] } },
+				description:
+					'Optional separate price for reasoning tokens; leave zero when the provider includes them in output pricing',
+			},
+			{
 				displayName: 'Currency',
 				name: 'currency',
 				type: 'string',
@@ -299,6 +309,11 @@ export class TokenAnalytics implements INodeType {
 									) as number,
 									outputPerMillion: this.getNodeParameter(
 										'outputPrice',
+										itemIndex,
+										0,
+									) as number,
+									reasoningPerMillion: this.getNodeParameter(
+										'reasoningPrice',
 										itemIndex,
 										0,
 									) as number,

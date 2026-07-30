@@ -480,6 +480,10 @@ export class OptimizedChatModel implements INodeType {
 								minimumRepetitions: cacheOptions.minimumRepetitions ?? 2,
 								minimumStablePrefixTokens:
 									cacheOptions.minimumStablePrefixTokens ?? 2048,
+								registryScope:
+									process.env.EXECUTIONS_MODE === 'queue'
+										? 'worker_local'
+										: 'process_local',
 							},
 						}
 					: {}),

@@ -28,6 +28,14 @@ describe('Token Saver node descriptions', () => {
 		expect(property(new TokenAnalytics(), 'outputDetail')).toMatchObject({ default: 'simple' });
 	});
 
+	it('lets users price reasoning tokens separately without provider presets', () => {
+		expect(property(new TokenAnalytics(), 'reasoningPrice')).toMatchObject({
+			type: 'number',
+			default: 0,
+			displayOptions: { show: { operation: ['estimateCost'] } },
+		});
+	});
+
 	it('exposes meaningful quality levels and no telemetry-only savings target', () => {
 		const chatModel = new OptimizedChatModel();
 		const profile = property(chatModel, 'profile') as {

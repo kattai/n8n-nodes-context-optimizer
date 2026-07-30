@@ -11,11 +11,17 @@ export interface TokenMeasurement {
 	actualOutput: number;
 	actualTotal: number;
 	providerUsageAvailable: boolean;
+	cacheUsageAvailable: boolean;
 	latencyMs: number;
 	fallbacks: number;
 	qualityGuardFailures: number;
 	retrievalCalls: number;
+	stablePrefixTokens: number;
+	dynamicTokensBefore: number;
+	dynamicTokensAfter: number;
 	profile?: string;
+	cacheStrategy?: string;
+	cacheDecision?: string;
 	strategies: string[];
 }
 
@@ -23,6 +29,7 @@ export interface TokenPricing {
 	inputPerMillion: number;
 	cachedInputPerMillion: number;
 	outputPerMillion: number;
+	reasoningPerMillion?: number;
 	currency: string;
 }
 
@@ -42,11 +49,15 @@ export interface TokenAnalysis {
 	actual: {
 		available: boolean;
 		inputTokens: number;
+		regularInputTokens: number;
+		cachedInputTokens: number;
 		outputTokens: number;
 		reasoningTokens: number;
 		totalTokens: number;
 		billableOutputTokens: number;
+		cacheUsageAvailable: boolean;
 	};
+	measurementConfidence: 'provider_actual' | 'provider_partial' | 'optimizer_estimate';
 	cost?: {
 		before: number;
 		after: number;
@@ -100,6 +111,16 @@ function nested(root: Record<string, unknown>, ...paths: string[]): unknown {
 	return undefined;
 }
 
+function hasNested(root: Record<string, unknown>, path: string): boolean {
+	let value: unknown = root;
+	for (const segment of path.split('.')) {
+		const current = record(value);
+		if (!Object.prototype.hasOwnProperty.call(current, segment)) return false;
+		value = current[segment];
+	}
+	return value !== undefined && value !== null;
+}
+
 function stringList(value: unknown): string[] {
 	if (Array.isArray(value)) return value.map(String).map((entry) => entry.trim()).filter(Boolean);
 	if (typeof value !== 'string') return [];
@@ -119,6 +140,12 @@ export function normalizeMeasurement(value: unknown): TokenMeasurement {
 		'quality.failures',
 		'qualityGuard.failed',
 	);
+	const cacheUsageAvailable = [
+		'cached',
+		'tokens.cached',
+		'cachedInputTokens',
+		'providerUsage.cachedInputTokens',
+	].some((path) => hasNested(metrics, path));
 	return {
 		original: finite(
 			nested(
@@ -199,6 +226,7 @@ export function normalizeMeasurement(value: unknown): TokenMeasurement {
 		providerUsageAvailable: Boolean(
 			nested(metrics, 'providerUsageAvailable', 'actual.available', 'providerUsage.available'),
 		),
+		cacheUsageAvailable,
 		latencyMs: finite(
 			nested(metrics, 'latencyMs', 'durationMs', 'optimization.durationMs', 'metrics.durationMs'),
 		),
@@ -214,7 +242,22 @@ export function normalizeMeasurement(value: unknown): TokenMeasurement {
 		retrievalCalls: finite(
 			nested(metrics, 'retrievalCalls', 'retrieval.calls', 'toolCalls.retrieval'),
 		),
+		stablePrefixTokens: finite(
+			nested(metrics, 'stablePrefixTokens', 'optimization.stablePrefixTokens'),
+		),
+		dynamicTokensBefore: finite(
+			nested(metrics, 'dynamicTokensBefore', 'optimization.dynamicTokensBefore'),
+		),
+		dynamicTokensAfter: finite(
+			nested(metrics, 'dynamicTokensAfter', 'optimization.dynamicTokensAfter'),
+		),
 		profile: String(nested(metrics, 'profile', 'optimization.profile') ?? '').trim() || undefined,
+		cacheStrategy:
+			String(nested(metrics, 'cacheStrategy', 'optimization.cacheStrategy') ?? '').trim() ||
+			undefined,
+		cacheDecision:
+			String(nested(metrics, 'cacheDecision', 'optimization.cacheDecision') ?? '').trim() ||
+			undefined,
 		strategies: stringList(
 			nested(metrics, 'strategies', 'strategyUsed', 'contentOptimization.strategies'),
 		),
@@ -241,6 +284,19 @@ export function analyzeTokens(
 	const billableOutputTokens = actualAvailable
 		? measurement.actualOutput + reasoningOutsideOutput
 		: measurement.output;
+	const cachedInputTokens = Math.min(
+		measurement.cached,
+		actualAvailable ? measurement.actualInput : measurement.sent,
+	);
+	const regularInputTokens = Math.max(
+		0,
+		(actualAvailable ? measurement.actualInput : measurement.sent) - cachedInputTokens,
+	);
+	const measurementConfidence = actualAvailable
+		? measurement.cacheUsageAvailable
+			? 'provider_actual'
+			: 'provider_partial'
+		: 'optimizer_estimate';
 	const result: TokenAnalysis = {
 		measurement,
 		savings: {
@@ -260,26 +316,50 @@ export function analyzeTokens(
 		actual: {
 			available: actualAvailable,
 			inputTokens: measurement.actualInput,
+			regularInputTokens,
+			cachedInputTokens,
 			outputTokens: measurement.actualOutput,
 			reasoningTokens: measurement.reasoning,
 			totalTokens: measurement.actualTotal,
 			billableOutputTokens,
+			cacheUsageAvailable: actualAvailable && measurement.cacheUsageAvailable,
 		},
+		measurementConfidence,
 	};
 
-	if (pricing) {
+	const pricingConfigured =
+		pricing &&
+		[
+			pricing.inputPerMillion,
+			pricing.cachedInputPerMillion,
+			pricing.outputPerMillion,
+			pricing.reasoningPerMillion ?? 0,
+		].some((price) => Number.isFinite(price) && price > 0);
+	if (pricing && pricingConfigured) {
 		const sentForCost = actualAvailable ? measurement.actualInput : measurement.sent;
 		const cached = Math.min(measurement.cached, sentForCost);
 		const regularInput = Math.max(0, sentForCost - cached);
 		const extraInput = measurement.compressor + measurement.retrieved + measurement.verifier;
+		const reasoningTokens = Math.max(measurement.reasoning, reasoningOutsideOutput);
+		const reasoningIncludedInOutput = Math.max(0, reasoningTokens - reasoningOutsideOutput);
+		const regularOutputTokens = Math.max(
+			0,
+			(actualAvailable ? measurement.actualOutput : measurement.output) -
+				reasoningIncludedInOutput,
+		);
+		const outputCost =
+			pricing.reasoningPerMillion !== undefined
+				? (regularOutputTokens / 1_000_000) * pricing.outputPerMillion +
+					(reasoningTokens / 1_000_000) * pricing.reasoningPerMillion
+				: (billableOutputTokens / 1_000_000) * pricing.outputPerMillion;
 		const before =
 			(measurement.original / 1_000_000) * pricing.inputPerMillion +
-			(billableOutputTokens / 1_000_000) * pricing.outputPerMillion;
+			outputCost;
 		const after =
 			(regularInput / 1_000_000) * pricing.inputPerMillion +
 			(cached / 1_000_000) * pricing.cachedInputPerMillion +
 			(extraInput / 1_000_000) * pricing.inputPerMillion +
-			(billableOutputTokens / 1_000_000) * pricing.outputPerMillion;
+			outputCost;
 		const saved = before - after;
 		result.cost = {
 			before: Number(before.toFixed(8)),
@@ -309,14 +389,20 @@ export function aggregateMeasurements(values: unknown[]): TokenAnalysis {
 		actualOutput: 0,
 		actualTotal: 0,
 		providerUsageAvailable: false,
+		cacheUsageAvailable: false,
 		latencyMs: 0,
 		fallbacks: 0,
 		qualityGuardFailures: 0,
 		retrievalCalls: 0,
+		stablePrefixTokens: 0,
+		dynamicTokensBefore: 0,
+		dynamicTokensAfter: 0,
 		strategies: [],
 	};
 	const profiles = new Set<string>();
 	const strategies = new Set<string>();
+	const cacheStrategies = new Set<string>();
+	const cacheDecisions = new Set<string>();
 	for (const measurement of measurements) {
 		for (const key of [
 			'original',
@@ -334,14 +420,32 @@ export function aggregateMeasurements(values: unknown[]): TokenAnalysis {
 			'fallbacks',
 			'qualityGuardFailures',
 			'retrievalCalls',
+			'stablePrefixTokens',
+			'dynamicTokensBefore',
+			'dynamicTokensAfter',
 		] as const) {
 			aggregate[key] += measurement[key];
 		}
 		aggregate.providerUsageAvailable ||= measurement.providerUsageAvailable;
+		aggregate.cacheUsageAvailable ||= measurement.cacheUsageAvailable;
 		if (measurement.profile) profiles.add(measurement.profile);
+		if (measurement.cacheStrategy) cacheStrategies.add(measurement.cacheStrategy);
+		if (measurement.cacheDecision) cacheDecisions.add(measurement.cacheDecision);
 		for (const strategy of measurement.strategies) strategies.add(strategy);
 	}
 	aggregate.profile = profiles.size === 1 ? [...profiles][0] : profiles.size > 1 ? 'mixed' : undefined;
+	aggregate.cacheStrategy =
+		cacheStrategies.size === 1
+			? [...cacheStrategies][0]
+			: cacheStrategies.size > 1
+				? 'mixed'
+				: undefined;
+	aggregate.cacheDecision =
+		cacheDecisions.size === 1
+			? [...cacheDecisions][0]
+			: cacheDecisions.size > 1
+				? 'mixed'
+				: undefined;
 	aggregate.strategies = [...strategies];
 	return analyzeTokens(aggregate);
 }
