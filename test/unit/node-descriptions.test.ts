@@ -7,6 +7,7 @@ import {
 import { ContextStore } from '../../nodes/ContextStore/ContextStore.node';
 import { OptimizedChatModel } from '../../nodes/OptimizedChatModel/OptimizedChatModel.node';
 import { TokenAnalytics } from '../../nodes/TokenAnalytics/TokenAnalytics.node';
+import { resolveNodeCacheStrategy } from '../../src/cache/node-options';
 
 function property(node: { description: { properties: Array<{ name: string }> } }, name: string) {
 	return node.description.properties.find((entry) => entry.name === name);
@@ -46,6 +47,37 @@ describe('Token Saver node descriptions', () => {
 			displayOptions: { show: { behavior: ['optimizeAndMeasure'], profile: ['aggressive'] } },
 		});
 		expect(property(new ContextOptimizer(), 'targetSavingsPercent')).toBeUndefined();
+	});
+
+	it('offers cache-aware strategies with progressive disclosure', () => {
+		const chatModel = new OptimizedChatModel();
+		const strategy = property(chatModel, 'cacheStrategy') as {
+			default: string;
+			options: Array<{ name: string; value: string; description: string }>;
+		};
+		expect(strategy.default).toBe('automatic_hybrid');
+		expect(strategy.options.map((entry) => entry.value)).toEqual([
+			'automatic_hybrid',
+			'cache_priority',
+			'token_reduction_priority',
+			'ignore_cache_signals',
+		]);
+		expect(strategy.options.every((entry) => entry.description.length > 40)).toBe(true);
+		expect(property(chatModel, 'cacheOptions')).toMatchObject({
+			type: 'collection',
+			displayOptions: { show: { behavior: ['optimizeAndMeasure'] } },
+		});
+		expect(property(chatModel, 'cachePrivacyNotice')).toMatchObject({ type: 'notice' });
+	});
+
+	it('keeps 0.5.2 workflows cache-neutral until the strategy is persisted', () => {
+		expect(resolveNodeCacheStrategy({ profile: 'balanced' })).toBe('ignore_cache_signals');
+		expect(resolveNodeCacheStrategy({ cacheStrategy: 'automatic_hybrid' })).toBe(
+			'automatic_hybrid',
+		);
+		expect(resolveNodeCacheStrategy({ cacheStrategy: 'invalid' })).toBe(
+			'ignore_cache_signals',
+		);
 	});
 
 	it('supports both legacy supplyData and current n8n AI Tool execution', () => {

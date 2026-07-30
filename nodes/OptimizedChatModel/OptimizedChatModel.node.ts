@@ -4,6 +4,7 @@ import { NodeConnectionTypes, NodeOperationError } from 'n8n-workflow';
 import type { CustomProfileConfig, OptimizerProfileName } from '../../src/core/types';
 import { recordModelTelemetry } from '../../src/analytics/model-telemetry-registry';
 import { extractProviderUsage } from '../../src/analytics/provider-usage';
+import { defaultFingerprintDirectory } from '../../src/cache/fingerprint-registry';
 import {
 	defaultStorageDirectory,
 	FileSystemResourceStore,
@@ -233,6 +234,116 @@ export class OptimizedChatModel implements INodeType {
 						typeOptions: { minValue: 0.02, maxValue: 8760, numberPrecision: 2 },
 						default: 24,
 						description: 'How long the exact original remains available to the Retriever',
+					},
+				],
+			},
+			{
+				displayName: 'Cache Strategy',
+				name: 'cacheStrategy',
+				type: 'options',
+				noDataExpression: true,
+				options: [
+					{
+						name: 'Automatic Hybrid (Recommended)',
+						value: 'automatic_hybrid',
+						description:
+							'Preserve repeated stable prefixes for provider caching and reduce changing content safely',
+						action: 'Automatically balance cache and token reduction',
+					},
+					{
+						name: 'Cache Priority',
+						value: 'cache_priority',
+						description:
+							'Favor stable prompt prefixes when provider cache savings matter more than raw input reduction',
+						action: 'Prioritize reusable provider cache prefixes',
+					},
+					{
+						name: 'Maximum Token Reduction',
+						value: 'token_reduction_priority',
+						description:
+							'Reduce every eligible block aggressively after preserving mandatory instructions and recent context',
+						action: 'Prioritize raw token reduction',
+					},
+					{
+						name: 'Ignore Cache Signals',
+						value: 'ignore_cache_signals',
+						description:
+							'Use only the selected optimization profile and reproduce the cache-neutral behavior from version 0.5.2',
+						action: 'Ignore provider cache evidence',
+					},
+				],
+				default: 'automatic_hybrid',
+				description:
+					'Choose how stable provider-cache prefixes and direct input-token reduction are balanced',
+				displayOptions: { show: { behavior: ['optimizeAndMeasure'] } },
+			},
+			{
+				displayName:
+					'Fingerprint registry stores only SHA-256 identifiers and timing/count metadata. It never stores prompt text, tool output, secrets, or embeddings.',
+				name: 'cachePrivacyNotice',
+				type: 'notice',
+				default: '',
+				displayOptions: {
+					show: {
+						behavior: ['optimizeAndMeasure'],
+						cacheStrategy: [
+							'automatic_hybrid',
+							'cache_priority',
+							'token_reduction_priority',
+						],
+					},
+				},
+			},
+			{
+				displayName: 'Cache-Aware Options',
+				name: 'cacheOptions',
+				type: 'collection',
+				placeholder: 'Add Setting',
+				default: {},
+				displayOptions: { show: { behavior: ['optimizeAndMeasure'] } },
+				description:
+					'Advanced repetition thresholds for provider-neutral implicit cache detection',
+				options: [
+					{
+						displayName: 'Fingerprint Directory',
+						name: 'fingerprintDirectory',
+						type: 'string',
+						default: '',
+						placeholder: defaultFingerprintDirectory(),
+						description:
+							'Self-hosted metadata directory; queue workers need the same shared path for account-wide observations',
+					},
+					{
+						displayName: 'Fingerprint TTL (Hours)',
+						name: 'fingerprintTtlHours',
+						type: 'number',
+						typeOptions: { minValue: 1, maxValue: 720, numberPrecision: 0 },
+						default: 24,
+						description: 'Time window in which repeated blocks count as stable cache candidates',
+					},
+					{
+						displayName: 'Maximum Fingerprints',
+						name: 'maximumFingerprints',
+						type: 'number',
+						typeOptions: { minValue: 100, maxValue: 1000000, numberPrecision: 0 },
+						default: 5000,
+						description: 'Maximum local metadata records before least-recently-seen entries are removed',
+					},
+					{
+						displayName: 'Minimum Repetitions',
+						name: 'minimumRepetitions',
+						type: 'number',
+						typeOptions: { minValue: 1, maxValue: 100, numberPrecision: 0 },
+						default: 2,
+						description: 'Observations required before treating the same large prefix as stable',
+					},
+					{
+						displayName: 'Minimum Stable Prefix Tokens',
+						name: 'minimumStablePrefixTokens',
+						type: 'number',
+						typeOptions: { minValue: 128, maxValue: 1000000, numberPrecision: 0 },
+						default: 2048,
+						description: 'Ignore cache policy overhead for prefixes too small to provide meaningful savings',
 					},
 				],
 			},
