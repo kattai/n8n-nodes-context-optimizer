@@ -373,5 +373,5 @@ Implementação seguirá TDD. Cada etapa deverá manter testes existentes aprova
 - [x] Integrar decisões ao wrapper sem alterar prefixos obrigatórios.
 - [x] Ampliar telemetria e custo cache-aware.
 - [x] Validar compatibilidade legada de workflows `0.5.2`.
-- [ ] Executar benchmarks universais frios e quentes.
+- [x] Executar benchmarks universais frios e quentes.
 - [ ] Publicar e instalar pacote `0.6.0` localmente.

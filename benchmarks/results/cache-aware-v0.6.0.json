@@ -1,0 +1,304 @@
+{
+  "version": "0.6.0",
+  "generatedAt": "2026-07-30T17:59:33.592Z",
+  "measurement": {
+    "tokens": "deterministic-estimate",
+    "cacheCost": "modeled-provider-cache-at-70-percent-hit",
+    "cachedInputPriceRatio": 0.1
+  },
+  "summary": {
+    "cases": 20,
+    "medianEligibleSavingsPercent": 80.51,
+    "minimumEligibleSavingsPercent": 80.01,
+    "casesAtOrAbove70Percent": 20,
+    "exactRetrievalPassed": 20,
+    "requestedPreviewFactsPreserved": 20
+  },
+  "acceptance": {
+    "medianEligibleSavingsAtLeast80": true,
+    "atLeast95PercentCasesAbove70": true,
+    "exactRetrieval100Percent": true,
+    "requestedPreviewFacts100Percent": true,
+    "automaticWarmCostNotAboveBaseline": true
+  },
+  "maximumSavingsCases": [
+    {
+      "domain": "json_api",
+      "variant": 0,
+      "originalTokens": 13587,
+      "optimizedTokens": 2716,
+      "savingsPercent": 80.01,
+      "targetBandReached": true,
+      "previewContainsRequestedMarker": true,
+      "exactRetrievalPassed": true,
+      "fallbackReason": null
+    },
+    {
+      "domain": "json_api",
+      "variant": 1,
+      "originalTokens": 13657,
+      "optimizedTokens": 2662,
+      "savingsPercent": 80.51,
+      "targetBandReached": true,
+      "previewContainsRequestedMarker": true,
+      "exactRetrievalPassed": true,
+      "fallbackReason": null
+    },
+    {
+      "domain": "json_api",
+      "variant": 2,
+      "originalTokens": 13657,
+      "optimizedTokens": 2662,
+      "savingsPercent": 80.51,
+      "targetBandReached": true,
+      "previewContainsRequestedMarker": true,
+      "exactRetrievalPassed": true,
+      "fallbackReason": null
+    },
+    {
+      "domain": "json_api",
+      "variant": 3,
+      "originalTokens": 13657,
+      "optimizedTokens": 2662,
+      "savingsPercent": 80.51,
+      "targetBandReached": true,
+      "previewContainsRequestedMarker": true,
+      "exactRetrievalPassed": true,
+      "fallbackReason": null
+    },
+    {
+      "domain": "rag_documents",
+      "variant": 0,
+      "originalTokens": 17980,
+      "optimizedTokens": 3453,
+      "savingsPercent": 80.8,
+      "targetBandReached": true,
+      "previewContainsRequestedMarker": true,
+      "exactRetrievalPassed": true,
+      "fallbackReason": null
+    },
+    {
+      "domain": "rag_documents",
+      "variant": 1,
+      "originalTokens": 18024,
+      "optimizedTokens": 3462,
+      "savingsPercent": 80.79,
+      "targetBandReached": true,
+      "previewContainsRequestedMarker": true,
+      "exactRetrievalPassed": true,
+      "fallbackReason": null
+    },
+    {
+      "domain": "rag_documents",
+      "variant": 2,
+      "originalTokens": 18024,
+      "optimizedTokens": 3462,
+      "savingsPercent": 80.79,
+      "targetBandReached": true,
+      "previewContainsRequestedMarker": true,
+      "exactRetrievalPassed": true,
+      "fallbackReason": null
+    },
+    {
+      "domain": "rag_documents",
+      "variant": 3,
+      "originalTokens": 18024,
+      "optimizedTokens": 3462,
+      "savingsPercent": 80.79,
+      "targetBandReached": true,
+      "previewContainsRequestedMarker": true,
+      "exactRetrievalPassed": true,
+      "fallbackReason": null
+    },
+    {
+      "domain": "logs",
+      "variant": 0,
+      "originalTokens": 40068,
+      "optimizedTokens": 8000,
+      "savingsPercent": 80.03,
+      "targetBandReached": true,
+      "previewContainsRequestedMarker": true,
+      "exactRetrievalPassed": true,
+      "fallbackReason": null
+    },
+    {
+      "domain": "logs",
+      "variant": 1,
+      "originalTokens": 40068,
+      "optimizedTokens": 7995,
+      "savingsPercent": 80.05,
+      "targetBandReached": true,
+      "previewContainsRequestedMarker": true,
+      "exactRetrievalPassed": true,
+      "fallbackReason": null
+    },
+    {
+      "domain": "logs",
+      "variant": 2,
+      "originalTokens": 40068,
+      "optimizedTokens": 7996,
+      "savingsPercent": 80.04,
+      "targetBandReached": true,
+      "previewContainsRequestedMarker": true,
+      "exactRetrievalPassed": true,
+      "fallbackReason": null
+    },
+    {
+      "domain": "logs",
+      "variant": 3,
+      "originalTokens": 40068,
+      "optimizedTokens": 7996,
+      "savingsPercent": 80.04,
+      "targetBandReached": true,
+      "previewContainsRequestedMarker": true,
+      "exactRetrievalPassed": true,
+      "fallbackReason": null
+    },
+    {
+      "domain": "conversation_history",
+      "variant": 0,
+      "originalTokens": 12049,
+      "optimizedTokens": 2310,
+      "savingsPercent": 80.83,
+      "targetBandReached": true,
+      "previewContainsRequestedMarker": true,
+      "exactRetrievalPassed": true,
+      "fallbackReason": null
+    },
+    {
+      "domain": "conversation_history",
+      "variant": 1,
+      "originalTokens": 12079,
+      "optimizedTokens": 2316,
+      "savingsPercent": 80.83,
+      "targetBandReached": true,
+      "previewContainsRequestedMarker": true,
+      "exactRetrievalPassed": true,
+      "fallbackReason": null
+    },
+    {
+      "domain": "conversation_history",
+      "variant": 2,
+      "originalTokens": 12079,
+      "optimizedTokens": 2316,
+      "savingsPercent": 80.83,
+      "targetBandReached": true,
+      "previewContainsRequestedMarker": true,
+      "exactRetrievalPassed": true,
+      "fallbackReason": null
+    },
+    {
+      "domain": "conversation_history",
+      "variant": 3,
+      "originalTokens": 12079,
+      "optimizedTokens": 2316,
+      "savingsPercent": 80.83,
+      "targetBandReached": true,
+      "previewContainsRequestedMarker": true,
+      "exactRetrievalPassed": true,
+      "fallbackReason": null
+    },
+    {
+      "domain": "mixed_tools",
+      "variant": 0,
+      "originalTokens": 16862,
+      "optimizedTokens": 3344,
+      "savingsPercent": 80.17,
+      "targetBandReached": true,
+      "previewContainsRequestedMarker": true,
+      "exactRetrievalPassed": true,
+      "fallbackReason": null
+    },
+    {
+      "domain": "mixed_tools",
+      "variant": 1,
+      "originalTokens": 16862,
+      "optimizedTokens": 3344,
+      "savingsPercent": 80.17,
+      "targetBandReached": true,
+      "previewContainsRequestedMarker": true,
+      "exactRetrievalPassed": true,
+      "fallbackReason": null
+    },
+    {
+      "domain": "mixed_tools",
+      "variant": 2,
+      "originalTokens": 16862,
+      "optimizedTokens": 3344,
+      "savingsPercent": 80.17,
+      "targetBandReached": true,
+      "previewContainsRequestedMarker": true,
+      "exactRetrievalPassed": true,
+      "fallbackReason": null
+    },
+    {
+      "domain": "mixed_tools",
+      "variant": 3,
+      "originalTokens": 16862,
+      "optimizedTokens": 3344,
+      "savingsPercent": 80.17,
+      "targetBandReached": true,
+      "previewContainsRequestedMarker": true,
+      "exactRetrievalPassed": true,
+      "fallbackReason": null
+    }
+  ],
+  "cacheStrategies": {
+    "originalTokens": 2254,
+    "baselineWarmCost": 0.0008347000000000001,
+    "cases": [
+      {
+        "strategy": "automatic_hybrid",
+        "coldInputTokens": 2254,
+        "warmInputTokens": 2254,
+        "warmCachedTokens": 1577,
+        "warmModeledCost": 0.0008347000000000001,
+        "warmCostVsBaselinePercent": 0,
+        "coldDecision": "no_change",
+        "warmDecision": "preserve_stable_prefix",
+        "warmStablePrefixTokens": 150,
+        "warmDynamicTokensBefore": 0,
+        "warmDynamicTokensAfter": 0
+      },
+      {
+        "strategy": "cache_priority",
+        "coldInputTokens": 2254,
+        "warmInputTokens": 2254,
+        "warmCachedTokens": 1577,
+        "warmModeledCost": 0.0008347000000000001,
+        "warmCostVsBaselinePercent": 0,
+        "coldDecision": "preserve_stable_prefix",
+        "warmDecision": "preserve_stable_prefix",
+        "warmStablePrefixTokens": 150,
+        "warmDynamicTokensBefore": 0,
+        "warmDynamicTokensAfter": 0
+      },
+      {
+        "strategy": "token_reduction_priority",
+        "coldInputTokens": 2146,
+        "warmInputTokens": 2146,
+        "warmCachedTokens": 1502,
+        "warmModeledCost": 0.0007942,
+        "warmCostVsBaselinePercent": -4.85,
+        "coldDecision": "reduce_dynamic_blocks",
+        "warmDecision": "reduce_dynamic_blocks",
+        "warmStablePrefixTokens": 0,
+        "warmDynamicTokensBefore": 150,
+        "warmDynamicTokensAfter": 33
+      },
+      {
+        "strategy": "ignore_cache_signals",
+        "coldInputTokens": 2146,
+        "warmInputTokens": 2146,
+        "warmCachedTokens": 1502,
+        "warmModeledCost": 0.0007942,
+        "warmCostVsBaselinePercent": -4.85,
+        "coldDecision": "legacy_profile_only",
+        "warmDecision": "legacy_profile_only",
+        "warmStablePrefixTokens": 0,
+        "warmDynamicTokensBefore": 0,
+        "warmDynamicTokensAfter": 0
+      }
+    ]
+  }
+}

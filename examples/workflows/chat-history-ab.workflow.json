@@ -53,7 +53,7 @@
     },
     {
       "parameters": {
-        "content": "## 03 — Otimizado\n\nMesmo Gemini e prompt. O Optimized Chat Model Balanced remove somente mensagens exatamente repetidas e preserva mensagens únicas.",
+        "content": "## 03 — Otimizado\n\nMesmo Gemini e prompt. Balanced + Automatic Hybrid preserva prefixos estáveis para cache e reduz apenas contexto dinâmico elegível. Repita o roteiro na mesma sessão para comparar frio e quente.",
         "height": 760,
         "width": 900,
         "color": 6
@@ -392,10 +392,11 @@
     {
       "parameters": {
         "behavior": "optimizeAndMeasure",
-        "profile": "balanced"
+        "profile": "balanced",
+        "cacheStrategy": "automatic_hybrid"
       },
       "id": "optimized-model",
-      "name": "Optimized Chat Model — Balanced",
+      "name": "Token Saver — Automatic Hybrid",
       "type": "n8n-nodes-context-optimizer.optimizedChatModel",
       "typeVersion": 1,
       "position": [
@@ -460,7 +461,7 @@
       "parameters": {
         "operation": "compareCurrentExecution",
         "baselineModelNode": "Measured Chat Model — Baseline",
-        "optimizedModelNode": "Optimized Chat Model — Balanced"
+        "optimizedModelNode": "Token Saver — Automatic Hybrid"
       },
       "id": "compare-token-analytics",
       "name": "Token Analytics — Uso Real A/B",
@@ -881,14 +882,14 @@
       "ai_languageModel": [
         [
           {
-            "node": "Optimized Chat Model — Balanced",
+            "node": "Token Saver — Automatic Hybrid",
             "type": "ai_languageModel",
             "index": 0
           }
         ]
       ]
     },
-    "Optimized Chat Model — Balanced": {
+    "Token Saver — Automatic Hybrid": {
       "ai_languageModel": [
         [
           {

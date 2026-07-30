@@ -23,6 +23,7 @@
         "lint:fix": "n8n-node lint --fix",
         "test": "vitest run --root .",
         "test:watch": "vitest --root .",
+        "benchmark:cache": "npm run build && node scripts/run-cache-aware-benchmark.mjs",
         "check": "npm run test && npm run build && npm run lint",
         "release": "n8n-node release",
         "prepublishOnly": "n8n-node prerelease"

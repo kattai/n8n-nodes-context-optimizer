@@ -1,5 +1,14 @@
 # Comparação local — agente com prompt de 12K
 
+## Resultado atual — 0.6.0
+
+- [Benchmark cache-aware universal](cache-aware-v0.6.0.md): 20 casos de JSON/API, RAG, logs, histórico e tools mistas; inclui matriz fria/quente das quatro estratégias.
+- Comando reproduzível: `npm run benchmark:cache`.
+
+Os números de cache do benchmark `0.6.0` são modelados e identificados como tal. Resultados provider-billed exigem execução A/B no workflow sanitizado `examples/workflows/chat-history-ab.workflow.json`.
+
+## Resultado anterior — agente 12K
+
 Dois workflows usam a mesma pergunta, o mesmo prompt e o mesmo Gemini 2.5 Flash.
 
 ## Resultado medido
