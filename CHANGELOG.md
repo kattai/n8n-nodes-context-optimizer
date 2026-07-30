@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.0 — 2026-07-30
+
+- Add provider-neutral cache-aware strategies: Automatic Hybrid, Cache Priority, Token Reduction Priority, and legacy Ignore Cache Signals.
+- Preserve stable prompt prefixes with SHA-256-only fingerprint metadata and configurable repetition thresholds.
+- Keep `0.5.2` workflows backward compatible when the new cache setting is absent.
+- Separate provider-reported regular input, cached input, output, and reasoning tokens.
+- Report measurement confidence and calculate cost only from explicit user prices.
+- Warn when queue-mode fingerprint observations may remain worker-local.
+
 ## 0.5.2 — 2026-07-30
 
 - Aggregate provider usage and optimization metrics across every internal Agent loop so A/B reports measure the complete conversation, including exact Retriever calls.

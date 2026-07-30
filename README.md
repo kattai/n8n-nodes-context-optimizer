@@ -12,6 +12,8 @@ Any n8n Chat Model -> Token Saver Chat Model -> AI Agent
 
 Choose `Save Tokens` and `Balanced (Recommended)`. The model response is unchanged. The wrapper removes safe historical repetition and structurally compresses large tool results before the connected provider receives them.
 
+For new nodes, keep `Cache Strategy` on `Automatic Hybrid (Recommended)`. It preserves repeated stable prefixes that provider caches can reuse, while optimizing dynamic history and tool results. Existing workflows created before `0.6.0` keep their previous behavior automatically.
+
 ## Which node to use
 
 | Node | Use it when | What it does |
@@ -34,6 +36,19 @@ Do not add Store, Retriever, or Savings to every workflow. They solve specific l
 Default levels never delete unique history merely to meet a token budget.
 
 The 70–90% target applies only to eligible large tool output, not to the complete request. System instructions, tool schemas, recent messages, and exact retrieval calls still consume tokens.
+
+## Cache strategy
+
+Optimization level controls **how strongly content may be reduced**. Cache strategy independently controls **whether stable prompt prefixes should remain byte-for-byte reusable**.
+
+| Strategy | Best use | Behavior |
+|---|---|---|
+| **Automatic Hybrid (Recommended)** | Most production Agents | Preserves uncertain or repeated stable prefixes; reduces dynamic eligible blocks |
+| **Cache Priority** | Large repeated system prompts and tool schemas | Prefers stable-prefix reuse even when direct token reduction would be larger |
+| **Token Reduction Priority** | Cold, one-off, or mostly changing requests | Minimizes eligible content even when the resulting prefix differs |
+| **Ignore Cache Signals** | Legacy workflows and controlled A/B tests | Uses only the selected optimization level, matching `0.5.2` behavior |
+
+Fingerprint records contain only SHA-256 and operational metadata, never prompt content. In queue mode, every worker must use the same shared `Fingerprint Directory`; otherwise cache observations remain worker-local and analytics emits `queue_mode_local_registry`.
 
 ## Simple output
 
@@ -93,6 +108,8 @@ Token reduction happens before the provider adapter, so the Chat Model wrapper i
 
 Usage metadata is normalized when exposed by OpenAI-compatible models, OpenRouter, Anthropic, Gemini, Ollama/local LangChain models, or generic n8n `llmOutput.tokenUsage`. Models that do not expose usage continue normally with clearly labeled estimates.
 
+`Token Savings` separates regular input, cached input, output, and reasoning when the provider reports them. Financial savings appear only after explicit model prices are configured. Confidence is reported as `provider_actual`, `provider_partial`, or `optimizer_estimate`.
+
 ## Local development
 
 ```bash
@@ -105,7 +122,7 @@ Install the generated tarball only in a local/self-hosted n8n user folder:
 
 ```powershell
 cd $HOME\.n8n\nodes
-npm install --save-exact C:\path\to\n8n-nodes-context-optimizer-0.5.2.tgz
+npm install --save-exact C:\path\to\n8n-nodes-context-optimizer-0.6.0.tgz
 ```
 
 Restart n8n after installation.
