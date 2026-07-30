@@ -364,3 +364,14 @@ Ordem de implementação:
 6. pacote `0.6.0`, instalação local e relatório final.
 
 Implementação seguirá TDD. Cada etapa deverá manter testes existentes aprovados e produzir commit isolado no repositório privado.
+
+## 20. Implementation TODO
+
+- [ ] Criar Fingerprint Registry persistente sem conteúdo bruto.
+- [ ] Criar Cache Policy Engine e matriz de estratégias.
+- [ ] Adicionar configuração cache-aware ao Token Saver Chat Model.
+- [ ] Integrar decisões ao wrapper sem alterar prefixos obrigatórios.
+- [ ] Ampliar telemetria e custo cache-aware.
+- [ ] Validar compatibilidade legada de workflows `0.5.2`.
+- [ ] Executar benchmarks universais frios e quentes.
+- [ ] Publicar e instalar pacote `0.6.0` localmente.
