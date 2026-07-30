@@ -1,0 +1,503 @@
+{
+  "id": "tokenSaverMaximumSavingsAB",
+  "name": "[LAB] Token Saver — Maximum Savings A/B",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## Maximum Savings — A/B real\n\nMesmo Gemini, temperatura, prompt e base de 100 leads. O ramo otimizado virtualiza o resultado grande, valida o Store e recupera o registro exato.",
+        "height": 880,
+        "width": 2760,
+        "color": 5
+      },
+      "id": "note",
+      "name": "Como o teste funciona",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1040,
+        -480
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "manual",
+      "name": "Executar Teste A/B",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -920,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "input",
+              "name": "chatInput",
+              "value": "Consulte o lead LEAD-1980.",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "input",
+      "name": "Entrada do Teste",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -700,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $('Entrada do Teste').item.json.chatInput }}",
+        "options": {
+          "systemMessage": "Você é um agente de validação de dados.\nExecute exatamente uma vez a tool consultar_base_leads.\nLocalize exclusivamente o registro LEAD-1980.\nSe o resultado contiver <context-resource>, execute retrieve_context com operation=get_exact_value, o resourceId recebido e path=records[80] antes de responder.\nNunca invente valores e não use conhecimento externo.\nResponda exatamente em cinco linhas, sem introdução e sem Markdown:\nLead: [lead_identifier]\nCidade: [franchise_city_of_interest]\nCapital: [declared_available_investment_capital]\nReunião: [scheduled_expansion_meeting]\nAprovado: [eligibility_approved em minúsculas]",
+          "maxIterations": 4,
+          "returnIntermediateSteps": false,
+          "enableStreaming": false
+        }
+      },
+      "id": "agent-baseline",
+      "name": "Agente Baseline",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        -420,
+        -180
+      ]
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-2.5-flash",
+        "options": {
+          "temperature": 0,
+          "maxOutputTokens": 1024
+        }
+      },
+      "id": "gemini-baseline",
+      "name": "Gemini 2.5 Flash — Baseline",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1.1,
+      "position": [
+        -500,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "behavior": "measureOnly"
+      },
+      "id": "wrapper-baseline",
+      "name": "Token Saver — Baseline",
+      "type": "n8n-nodes-context-optimizer.optimizedChatModel",
+      "typeVersion": 1,
+      "position": [
+        -260,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "name": "consultar_base_leads",
+        "description": "Obrigatória. Retorna 100 leads em JSON. Use uma vez para localizar o lead_identifier solicitado.",
+        "language": "javaScript",
+        "jsCode": "const records = [];\nfor (let index = 0; index < 100; index += 1) {\n  const numericId = 1900 + index;\n  const target = numericId === 1980;\n  records.push({\n    lead_identifier: 'LEAD-' + numericId,\n    contact_full_name: target ? 'Marina Oliveira' : 'Lead Demonstração ' + numericId,\n    contact_email_address: target ? 'marina.oliveira@example.com' : 'lead' + numericId + '@example.com',\n    franchise_city_of_interest: target ? 'Campinas/SP' : ['Curitiba/PR', 'Goiânia/GO', 'Londrina/PR', 'Sorocaba/SP'][index % 4],\n    declared_available_investment_capital: target ? 'R$ 850.000,00' : 'R$ ' + (450000 + (index % 8) * 50000).toLocaleString('pt-BR') + ',00',\n    commercial_pipeline_stage: ['Novo lead', 'Qualificação', 'Reunião pendente'][index % 3],\n    acquisition_source_channel: ['Site institucional', 'Landing page', 'Indicação'][index % 3],\n    franchise_interest_temperature: ['alto', 'médio', 'em avaliação'][index % 3],\n    scheduled_expansion_meeting: target ? '05/08/2026 14:30' : null,\n    eligibility_approved: target ? false : index % 5 !== 0,\n    responsible_expansion_team: 'Expansão Casa do Construtor',\n    operational_follow_up_note: 'Confirmar somente dados presentes; não inferir cidade, capital, data, horário ou aprovação.',\n    record_created_at: '2026-07-' + String((index % 28) + 1).padStart(2, '0') + 'T09:00:00-03:00'\n  });\n}\nreturn JSON.stringify({ dataset_name: 'Leads de expansão — laboratório local', total_records: records.length, records });",
+        "specifyInputSchema": true,
+        "schemaType": "manual",
+        "inputSchema": "{\"type\":\"object\",\"properties\":{\"query\":{\"type\":\"string\",\"description\":\"Identificador exato do lead\"}},\"required\":[\"query\"]}"
+      },
+      "id": "tool-baseline",
+      "name": "Base 100 Leads — Baseline",
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1.3,
+      "position": [
+        -20,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "result-baseline-field",
+              "name": "baseline_output",
+              "value": "={{ $('Agente Baseline').item.json.output }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "result-baseline",
+      "name": "Resultado Baseline",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -20,
+        -180
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $('Entrada do Teste').item.json.chatInput }}",
+        "options": {
+          "systemMessage": "Você é um agente de validação de dados.\nExecute exatamente uma vez a tool consultar_base_leads.\nLocalize exclusivamente o registro LEAD-1980.\nSe o resultado contiver <context-resource>, execute retrieve_context com operation=get_exact_value, o resourceId recebido e path=records[80] antes de responder.\nNunca invente valores e não use conhecimento externo.\nResponda exatamente em cinco linhas, sem introdução e sem Markdown:\nLead: [lead_identifier]\nCidade: [franchise_city_of_interest]\nCapital: [declared_available_investment_capital]\nReunião: [scheduled_expansion_meeting]\nAprovado: [eligibility_approved em minúsculas]",
+          "maxIterations": 4,
+          "returnIntermediateSteps": false,
+          "enableStreaming": false
+        }
+      },
+      "id": "agent-maximum",
+      "name": "Agente Maximum Savings",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        320,
+        -180
+      ]
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-2.5-flash",
+        "options": {
+          "temperature": 0,
+          "maxOutputTokens": 1024
+        }
+      },
+      "id": "gemini-maximum",
+      "name": "Gemini 2.5 Flash — Maximum",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1.1,
+      "position": [
+        240,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "behavior": "optimizeAndMeasure",
+        "profile": "aggressive",
+        "maximumSavingsOptions": {
+          "scope": "={{ $workflow.id }}",
+          "storageDirectory": "",
+          "ttlHours": 24,
+          "minimumContentTokens": 1000,
+          "targetPreviewPercent": 20,
+          "maxPreviewPercent": 30,
+          "maxResourceMegabytes": 10,
+          "allowSecretLikeContent": false
+        }
+      },
+      "id": "wrapper-maximum",
+      "name": "Token Saver — Maximum Savings",
+      "type": "n8n-nodes-context-optimizer.optimizedChatModel",
+      "typeVersion": 1,
+      "position": [
+        480,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "name": "consultar_base_leads",
+        "description": "Obrigatória. Retorna 100 leads em JSON. Use uma vez para localizar o lead_identifier solicitado.",
+        "language": "javaScript",
+        "jsCode": "const records = [];\nfor (let index = 0; index < 100; index += 1) {\n  const numericId = 1900 + index;\n  const target = numericId === 1980;\n  records.push({\n    lead_identifier: 'LEAD-' + numericId,\n    contact_full_name: target ? 'Marina Oliveira' : 'Lead Demonstração ' + numericId,\n    contact_email_address: target ? 'marina.oliveira@example.com' : 'lead' + numericId + '@example.com',\n    franchise_city_of_interest: target ? 'Campinas/SP' : ['Curitiba/PR', 'Goiânia/GO', 'Londrina/PR', 'Sorocaba/SP'][index % 4],\n    declared_available_investment_capital: target ? 'R$ 850.000,00' : 'R$ ' + (450000 + (index % 8) * 50000).toLocaleString('pt-BR') + ',00',\n    commercial_pipeline_stage: ['Novo lead', 'Qualificação', 'Reunião pendente'][index % 3],\n    acquisition_source_channel: ['Site institucional', 'Landing page', 'Indicação'][index % 3],\n    franchise_interest_temperature: ['alto', 'médio', 'em avaliação'][index % 3],\n    scheduled_expansion_meeting: target ? '05/08/2026 14:30' : null,\n    eligibility_approved: target ? false : index % 5 !== 0,\n    responsible_expansion_team: 'Expansão Casa do Construtor',\n    operational_follow_up_note: 'Confirmar somente dados presentes; não inferir cidade, capital, data, horário ou aprovação.',\n    record_created_at: '2026-07-' + String((index % 28) + 1).padStart(2, '0') + 'T09:00:00-03:00'\n  });\n}\nreturn JSON.stringify({ dataset_name: 'Leads de expansão — laboratório local', total_records: records.length, records });",
+        "specifyInputSchema": true,
+        "schemaType": "manual",
+        "inputSchema": "{\"type\":\"object\",\"properties\":{\"query\":{\"type\":\"string\",\"description\":\"Identificador exato do lead\"}},\"required\":[\"query\"]}"
+      },
+      "id": "tool-maximum",
+      "name": "Base 100 Leads — Maximum",
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1.3,
+      "position": [
+        720,
+        20
+      ]
+    },
+    {
+      "parameters": {
+        "toolDescription": "Retrieve exact data from a context-resource receipt. When instructed, use get_exact_value with the received resourceId and JSON path. Never guess omitted data.",
+        "scope": "={{ $workflow.id }}",
+        "storageDirectory": "",
+        "maxResults": 20,
+        "maxTokens": 4000,
+        "maxCalls": 5,
+        "allowedFields": "",
+        "blockedFields": "password, apiKey, secret",
+        "allowFullOriginal": false
+      },
+      "id": "retriever",
+      "name": "Token Saver Retriever",
+      "type": "n8n-nodes-context-optimizer.contextRetrieverTool",
+      "typeVersion": 1,
+      "position": [
+        720,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "result-maximum-field",
+              "name": "optimized_output",
+              "value": "={{ $('Agente Maximum Savings').item.json.output }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "result-maximum",
+      "name": "Resultado Maximum Savings",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        720,
+        -180
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "id": "merge",
+      "name": "Unir Respostas",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        1040,
+        -40
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "compareCurrentExecution",
+        "baselineModelNode": "Token Saver — Baseline",
+        "optimizedModelNode": "Token Saver — Maximum Savings",
+        "outputDetail": "detailed"
+      },
+      "id": "savings",
+      "name": "Medir Economia Real",
+      "type": "n8n-nodes-context-optimizer.tokenAnalytics",
+      "typeVersion": 1,
+      "position": [
+        1280,
+        -40
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const comparison = $input.first().json;\nconst savings = comparison.tokenSavings || {};\nconst telemetry = comparison.modelTelemetry || {};\nconst optimization = telemetry.optimized?.optimization || {};\nconst baseline = String($('Resultado Baseline').first().json.baseline_output || '');\nconst optimized = String($('Resultado Maximum Savings').first().json.optimized_output || '');\nconst expected = [\"LEAD-1980\",\"Campinas/SP\",\"R$ 850.000,00\",\"05/08/2026 14:30\",\"false\"];\nconst normalize = (value) => String(value || '').normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').toLowerCase();\nconst factsPreserved = expected.every((fact) => normalize(baseline).includes(normalize(fact)) && normalize(optimized).includes(normalize(fact)));\nreturn [{ json: {\n  output: [\n    '## Maximum Savings — prova real',\n    '**Provider:** ' + savings.before + ' → ' + savings.after + ' tokens (' + savings.percent + '%)',\n    '**Conteúdo elegível:** ' + optimization.eligibleTokensBefore + ' → ' + optimization.eligibleTokensAfter + ' tokens (' + optimization.eligibleSavingsPercent + '%)',\n    '**Recuperação exata exigida:** ' + String(optimization.retrievalRequired),\n    '**Meta 70–90% atingida:** ' + String(optimization.targetBandReached),\n    '**5/5 fatos preservados:** ' + String(factsPreserved)\n  ].join('\\n'),\n  baselineOutput: baseline,\n  optimizedOutput: optimized,\n  providerSavings: savings,\n  eligibleSavings: {\n    before: optimization.eligibleTokensBefore,\n    after: optimization.eligibleTokensAfter,\n    percent: optimization.eligibleSavingsPercent,\n    targetBandReached: optimization.targetBandReached,\n    retrievalRequired: optimization.retrievalRequired,\n    resources: optimization.virtualizedResourceIds,\n    fallbackReason: optimization.targetNotReachedReason || null,\n    storageFallbackUsed: optimization.storageFallbackUsed\n  },\n  factsPreserved,\n  outputsMatch: baseline === optimized,\n  datasetRecords: 100,\n  targetIndex: 80,\n  model: 'models/gemini-2.5-flash',\n  measurement: 'provider'\n} }];"
+      },
+      "id": "report",
+      "name": "Relatório Final",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1520,
+        -40
+      ]
+    }
+  ],
+  "connections": {
+    "Executar Teste A/B": {
+      "main": [
+        [
+          {
+            "node": "Entrada do Teste",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Entrada do Teste": {
+      "main": [
+        [
+          {
+            "node": "Agente Baseline",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Agente Maximum Savings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini 2.5 Flash — Baseline": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Token Saver — Baseline",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Token Saver — Baseline": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Agente Baseline",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Base 100 Leads — Baseline": {
+      "ai_tool": [
+        [
+          {
+            "node": "Agente Baseline",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agente Baseline": {
+      "main": [
+        [
+          {
+            "node": "Resultado Baseline",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini 2.5 Flash — Maximum": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Token Saver — Maximum Savings",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Token Saver — Maximum Savings": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Agente Maximum Savings",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Base 100 Leads — Maximum": {
+      "ai_tool": [
+        [
+          {
+            "node": "Agente Maximum Savings",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Token Saver Retriever": {
+      "ai_tool": [
+        [
+          {
+            "node": "Agente Maximum Savings",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agente Maximum Savings": {
+      "main": [
+        [
+          {
+            "node": "Resultado Maximum Savings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resultado Baseline": {
+      "main": [
+        [
+          {
+            "node": "Unir Respostas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resultado Maximum Savings": {
+      "main": [
+        [
+          {
+            "node": "Unir Respostas",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Unir Respostas": {
+      "main": [
+        [
+          {
+            "node": "Medir Economia Real",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Medir Economia Real": {
+      "main": [
+        [
+          {
+            "node": "Relatório Final",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/Sao_Paulo",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all"
+  },
+  "staticData": null,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "versionId": "ef3cb000-4e4d-4f31-a97f-932b87cfd34f",
+  "tags": []
+}

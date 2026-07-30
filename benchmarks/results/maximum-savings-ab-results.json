@@ -1,0 +1,60 @@
+{
+  "workflowId": "tokenSaverMaximumSavingsAB",
+  "executionId": 101,
+  "executionStatus": "success",
+  "startedAt": "2026-07-30 16:50:28.114",
+  "stoppedAt": "2026-07-30 16:50:43.824",
+  "packageVersion": "0.5.2",
+  "retrieverCalls": 1,
+  "retrieverEvidence": [
+    {
+      "resourceId": "ctx_d3ddd47d37b122913869be84",
+      "path": "records[80]",
+      "exact": true,
+      "value": {
+        "lead_identifier": "LEAD-1980",
+        "contact_full_name": "Marina Oliveira",
+        "contact_email_address": "marina.oliveira@example.com",
+        "franchise_city_of_interest": "Campinas/SP",
+        "declared_available_investment_capital": "R$ 850.000,00",
+        "commercial_pipeline_stage": "Reunião pendente",
+        "acquisition_source_channel": "Indicação",
+        "franchise_interest_temperature": "em avaliação",
+        "scheduled_expansion_meeting": "05/08/2026 14:30",
+        "eligibility_approved": false,
+        "responsible_expansion_team": "Expansão Casa do Construtor",
+        "operational_follow_up_note": "Confirmar somente dados presentes; não inferir cidade, capital, data, horário ou aprovação.",
+        "record_created_at": "2026-07-25T09:00:00-03:00"
+      }
+    }
+  ],
+  "output": "## Maximum Savings — prova real\n**Provider:** 27745 → 10304 tokens (62.86%)\n**Conteúdo elegível:** 33797 → 6753 tokens (80.02%)\n**Recuperação exata exigida:** true\n**Meta 70–90% atingida:** true\n**5/5 fatos preservados:** true",
+  "baselineOutput": "Lead: LEAD-1980\nCidade: Campinas/SP\nCapital: R$ 850.000,00\nReunião: 05/08/2026 14:30\nAprovado: false",
+  "optimizedOutput": "Lead: LEAD-1980\nCidade: Campinas/SP\nCapital: R$ 850.000,00\nReunião: 05/08/2026 14:30\nAprovado: false",
+  "providerSavings": {
+    "before": 27745,
+    "after": 10304,
+    "saved": 17441,
+    "percent": 62.86,
+    "measurement": "provider",
+    "qualityPassed": true
+  },
+  "eligibleSavings": {
+    "before": 33797,
+    "after": 6753,
+    "percent": 80.02,
+    "targetBandReached": true,
+    "retrievalRequired": true,
+    "resources": [
+      "ctx_d3ddd47d37b122913869be84"
+    ],
+    "fallbackReason": null,
+    "storageFallbackUsed": false
+  },
+  "factsPreserved": true,
+  "outputsMatch": true,
+  "datasetRecords": 100,
+  "targetIndex": 80,
+  "model": "models/gemini-2.5-flash",
+  "measurement": "provider"
+}

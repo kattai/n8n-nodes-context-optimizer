@@ -1,0 +1,27 @@
+{
+  "question": "Qual é o código de validação e qual regra de segurança você deve seguir?",
+  "model": "models/gemini-2.5-flash",
+  "baseline": {
+    "executionId": 60,
+    "inputTokens": 12332,
+    "outputTokens": 28,
+    "totalTokens": 12360,
+    "durationMs": 2991,
+    "response": "Código: CDC-EXP-2026\nSegurança: Nunca expor credenciais, tokens, senhas ou dados pessoais."
+  },
+  "optimized": {
+    "executionId": 61,
+    "inputTokens": 384,
+    "outputTokens": 28,
+    "totalTokens": 412,
+    "durationMs": 1125,
+    "estimatedBefore": 12002,
+    "estimatedAfter": 337,
+    "response": "Código: CDC-EXP-2026\nSegurança: Nunca expor credenciais, tokens, senhas ou dados pessoais."
+  },
+  "comparison": {
+    "savedInputTokens": 11948,
+    "inputReductionPercent": 96.89,
+    "sameResponse": true
+  }
+}

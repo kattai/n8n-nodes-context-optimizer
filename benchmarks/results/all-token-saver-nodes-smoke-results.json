@@ -1,0 +1,49 @@
+{
+  "workflowId": "tokenSaverAllNodesSmoke",
+  "workflowName": "[LAB] Token Saver — Smoke Test dos 5 Nodes",
+  "executionId": 98,
+  "status": "success",
+  "startedAt": "2026-07-30 15:36:41.488",
+  "stoppedAt": "2026-07-30 15:36:51.054",
+  "packageVersion": "0.4.5",
+  "nodesTested": [
+    "Token Saver Content",
+    "Token Savings",
+    "Token Saver Store",
+    "Token Saver Chat Model",
+    "Token Saver Retriever"
+  ],
+  "contentSavings": {
+    "before": 10485,
+    "after": 5935,
+    "saved": 4550,
+    "percent": 43.4,
+    "measurement": "estimated",
+    "qualityPassed": true
+  },
+  "resourceId": "ctx_557228e5faf11c941fe1b348",
+  "originalLeakedBySimpleOutputs": false,
+  "factsPreserved": true,
+  "retrievedOutput": "Lead: SMOKE-042\nCidade: Ribeirão Preto/SP\nCapital: R$ 975.000,00\nReunião: 12/08/2026 10:30\nAprovado: true",
+  "chatModelTelemetry": {
+    "optimization": {
+      "operation": "invoke",
+      "profile": "balanced",
+      "messagesBefore": 4,
+      "messagesAfter": 4,
+      "tokensBeforeEstimated": 345,
+      "tokensAfterEstimated": 345,
+      "savingsTokensEstimated": 0,
+      "savingsPercentEstimated": 0,
+      "protectedFactsCount": 15,
+      "tokensAreEstimated": true,
+      "bypassReason": "tool_sequence_present"
+    },
+    "providerUsage": {
+      "inputTokens": 630,
+      "outputTokens": 60,
+      "totalTokens": 890,
+      "available": true
+    }
+  }
+}

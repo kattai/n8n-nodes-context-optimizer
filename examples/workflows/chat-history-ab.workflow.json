@@ -1,0 +1,1002 @@
+{
+  "id": "contextOptimizerMessageHistoryAB",
+  "name": "[LAB] Chat A/B — Histórico Baseline x Otimizado",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## Laboratório A/B — histórico real\n\nCada mensagem vai para dois agentes com o mesmo Gemini 2.5 Flash e o mesmo prompt curto.\n\n- **Baseline:** histórico completo\n- **Otimizado:** histórico passa pelo Optimized Chat Model\n- **Resultado:** tokens reais, mensagens antes/depois e qualidade\n\nAbra uma nova sessão entre os dois cenários. O workflow não chama WhatsApp, RD, estoque ou agenda.",
+        "height": 360,
+        "width": 3300,
+        "color": 5
+      },
+      "id": "note-overview",
+      "name": "00 — Como testar",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -960,
+        -720
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## 01 — Entrada e tabela\n\nO Chat Trigger recebe mensagens reais. A tabela local é criada ou reutilizada, e o sessionId é separado em duas memórias.",
+        "height": 760,
+        "width": 760,
+        "color": 7
+      },
+      "id": "note-input",
+      "name": "01 — Entrada",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -960,
+        -320
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## 02 — Baseline\n\nO wrapper fica em **Measure Only**: registra uso real sem modificar mensagens. A memória usa `baseline:{sessionId}`.",
+        "height": 760,
+        "width": 780,
+        "color": 4
+      },
+      "id": "note-baseline",
+      "name": "02 — Baseline",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -120,
+        -320
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## 03 — Otimizado\n\nMesmo Gemini e prompt. O Optimized Chat Model Balanced remove somente mensagens exatamente repetidas e preserva mensagens únicas.",
+        "height": 760,
+        "width": 900,
+        "color": 6
+      },
+      "id": "note-optimized",
+      "name": "03 — Otimizado",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        720,
+        -320
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## 04 — Medição e resposta\n\nUsa `tokenUsage/providerUsage` do Gemini. Estimativa nunca é apresentada como real. Salva o turno, soma a sessão e devolve o relatório no chat.",
+        "height": 760,
+        "width": 1080,
+        "color": 5
+      },
+      "id": "note-report",
+      "name": "04 — Comparação",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1680,
+        -320
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Roteiro repetitivo\n\n**1. Fatos**\n```\nFATOS: Projeto Atlas; cidade Curitiba/PR; código FRAN-4271; capital R$ 850.000,00; reunião 05/08/2026 às 14:30.\n```\n\n**2. Copie e envie seis vezes**\n```\nCARGA: Este bloco representa informações operacionais repetidas que uma automação pode reenviar ao histórico. Preserve os fatos confirmados, não invente dados ausentes, não altere códigos, cidades, valores monetários, datas, horários ou negações. Use somente o contexto da conversa. Quando um valor exato for solicitado, copie-o literalmente. Se houver dúvida, diga que a informação não está disponível. Este conteúdo é deliberadamente idêntico em todos os turnos de carga para medir deduplicação de mensagens reais.\n```\n\n**3. Verifique**\n```\nCOMPARAR: Informe projeto, cidade, código, capital e reunião usando somente o histórico.\n```\n\nDepois inicie nova sessão e envie mensagens diferentes para confirmar que texto único não é removido.",
+        "height": 820,
+        "width": 3720,
+        "color": 3
+      },
+      "id": "note-script",
+      "name": "05 — Roteiro",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -960,
+        520
+      ]
+    },
+    {
+      "parameters": {
+        "public": true,
+        "mode": "hostedChat",
+        "authentication": "none",
+        "initialMessages": "Envie as mensagens do roteiro nas Sticky Notes para comparar o histórico baseline e otimizado.",
+        "availableInChat": false,
+        "options": {
+          "responseMode": "lastNode",
+          "title": "Context Optimizer — Teste A/B",
+          "subtitle": "Mesmo Gemini. Histórico completo versus otimizado.",
+          "inputPlaceholder": "Envie a próxima mensagem do roteiro...",
+          "showWelcomeScreen": false,
+          "loadPreviousSession": "notSupported"
+        }
+      },
+      "id": "chat-trigger",
+      "name": "Chat A/B — Mensagens Reais",
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        -840,
+        0
+      ],
+      "webhookId": "3fc45293-6696-4990-8b55-c5220b7fef16"
+    },
+    {
+      "parameters": {
+        "resource": "table",
+        "operation": "create",
+        "tableName": "lab_context_optimizer_ab_turns",
+        "columns": {
+          "column": [
+            {
+              "name": "session_id",
+              "type": "string"
+            },
+            {
+              "name": "execution_id",
+              "type": "string"
+            },
+            {
+              "name": "created_at",
+              "type": "date"
+            },
+            {
+              "name": "chat_input",
+              "type": "string"
+            },
+            {
+              "name": "baseline_output",
+              "type": "string"
+            },
+            {
+              "name": "optimized_output",
+              "type": "string"
+            },
+            {
+              "name": "baseline_input_tokens",
+              "type": "number"
+            },
+            {
+              "name": "baseline_output_tokens",
+              "type": "number"
+            },
+            {
+              "name": "optimized_input_tokens",
+              "type": "number"
+            },
+            {
+              "name": "optimized_output_tokens",
+              "type": "number"
+            },
+            {
+              "name": "saved_input_tokens",
+              "type": "number"
+            },
+            {
+              "name": "savings_percent",
+              "type": "number"
+            },
+            {
+              "name": "messages_before",
+              "type": "number"
+            },
+            {
+              "name": "messages_after",
+              "type": "number"
+            },
+            {
+              "name": "estimated_before",
+              "type": "number"
+            },
+            {
+              "name": "estimated_after",
+              "type": "number"
+            },
+            {
+              "name": "same_response",
+              "type": "boolean"
+            },
+            {
+              "name": "quality_check_ran",
+              "type": "boolean"
+            },
+            {
+              "name": "facts_preserved",
+              "type": "boolean"
+            },
+            {
+              "name": "measurement_type",
+              "type": "string"
+            },
+            {
+              "name": "fallback",
+              "type": "boolean"
+            },
+            {
+              "name": "bypass_reason",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {
+          "createIfNotExists": true
+        }
+      },
+      "id": "create-table",
+      "name": "Criar ou Reutilizar Tabela",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -600,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "normalize-session",
+              "name": "sessionId",
+              "value": "={{ $('Chat A/B — Mensagens Reais').item.json.sessionId || ('exec-' + $execution.id) }}",
+              "type": "string"
+            },
+            {
+              "id": "normalize-input",
+              "name": "chatInput",
+              "value": "={{ $('Chat A/B — Mensagens Reais').item.json.chatInput }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "normalize-input",
+      "name": "Normalizar Entrada",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -360,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $('Normalizar Entrada').item.json.chatInput }}",
+        "options": {
+          "systemMessage": "Você é um assistente de teste A/B de memória.\nResponda sempre em português brasileiro.\nUse somente fatos presentes na conversa. Nunca invente valores.\nSe a mensagem começar com \"FATOS:\", responda exatamente: FATOS REGISTRADOS.\nSe a mensagem começar com \"CARGA:\", responda exatamente: REGISTRADO.\nSe a mensagem começar com \"COMPARAR:\", responda em exatamente cinco linhas:\nProjeto: [valor]\nCidade: [valor]\nCódigo: [valor]\nCapital: [valor]\nReunião: [data e hora]\nCopie literalmente os valores informados anteriormente.\nPara qualquer outra mensagem, responda de forma curta e objetiva.",
+          "maxIterations": 3,
+          "returnIntermediateSteps": false,
+          "enableStreaming": false
+        }
+      },
+      "id": "baseline-agent",
+      "name": "Agente Baseline",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        120,
+        -64
+      ]
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-2.5-flash",
+        "options": {
+          "temperature": 0,
+          "maxOutputTokens": 500
+        }
+      },
+      "id": "baseline-gemini",
+      "name": "Gemini 2.5 Flash — Baseline",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1.1,
+      "position": [
+        -48,
+        224
+      ]
+    },
+    {
+      "parameters": {
+        "behavior": "measureOnly"
+      },
+      "id": "baseline-model",
+      "name": "Measured Chat Model — Baseline",
+      "type": "n8n-nodes-context-optimizer.optimizedChatModel",
+      "typeVersion": 1,
+      "position": [
+        192,
+        176
+      ]
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ 'baseline:' + $('Normalizar Entrada').item.json.sessionId }}",
+        "contextWindowLength": 50
+      },
+      "id": "baseline-memory",
+      "name": "Memória — Baseline",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.4,
+      "position": [
+        416,
+        176
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "baseline-result-output",
+              "name": "baseline_output",
+              "value": "={{ $('Agente Baseline').item.json.output }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "baseline-result",
+      "name": "Resultado Baseline",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        480,
+        -64
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $('Normalizar Entrada').item.json.chatInput }}",
+        "options": {
+          "systemMessage": "Você é um assistente de teste A/B de memória.\nResponda sempre em português brasileiro.\nUse somente fatos presentes na conversa. Nunca invente valores.\nSe a mensagem começar com \"FATOS:\", responda exatamente: FATOS REGISTRADOS.\nSe a mensagem começar com \"CARGA:\", responda exatamente: REGISTRADO.\nSe a mensagem começar com \"COMPARAR:\", responda em exatamente cinco linhas:\nProjeto: [valor]\nCidade: [valor]\nCódigo: [valor]\nCapital: [valor]\nReunião: [data e hora]\nCopie literalmente os valores informados anteriormente.\nPara qualquer outra mensagem, responda de forma curta e objetiva.",
+          "maxIterations": 3,
+          "returnIntermediateSteps": false,
+          "enableStreaming": false
+        }
+      },
+      "id": "optimized-agent",
+      "name": "Agente Otimizado",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        960,
+        -64
+      ]
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-2.5-flash",
+        "options": {
+          "temperature": 0,
+          "maxOutputTokens": 500
+        }
+      },
+      "id": "optimized-gemini",
+      "name": "Gemini 2.5 Flash — Otimizado",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1.1,
+      "position": [
+        760,
+        224
+      ]
+    },
+    {
+      "parameters": {
+        "behavior": "optimizeAndMeasure",
+        "profile": "balanced"
+      },
+      "id": "optimized-model",
+      "name": "Optimized Chat Model — Balanced",
+      "type": "n8n-nodes-context-optimizer.optimizedChatModel",
+      "typeVersion": 1,
+      "position": [
+        1016,
+        176
+      ]
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ 'optimized:' + $('Normalizar Entrada').item.json.sessionId }}",
+        "contextWindowLength": 50
+      },
+      "id": "optimized-memory",
+      "name": "Memória — Otimizada",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.4,
+      "position": [
+        1272,
+        176
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "optimized-result-output",
+              "name": "optimized_output",
+              "value": "={{ $('Agente Otimizado').item.json.output }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "optimized-result",
+      "name": "Resultado Otimizado",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1320,
+        -64
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "id": "merge-results",
+      "name": "Unir Resultados A/B",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        1744,
+        -64
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "compareCurrentExecution",
+        "baselineModelNode": "Measured Chat Model — Baseline",
+        "optimizedModelNode": "Optimized Chat Model — Balanced"
+      },
+      "id": "compare-token-analytics",
+      "name": "Token Analytics — Uso Real A/B",
+      "type": "n8n-nodes-context-optimizer.tokenAnalytics",
+      "typeVersion": 1,
+      "position": [
+        1936,
+        -64
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const merged = $input.first().json;\nconst normalized = $('Normalizar Entrada').first().json;\n\nfunction finiteNumber(value) {\n  const number = Number(value);\n  return Number.isFinite(number) ? number : undefined;\n}\n\nfunction extractUsage(...roots) {\n  for (const root of roots) {\n    if (!root || typeof root !== 'object') continue;\n    const candidates = [\n      root.tokenUsage,\n      root.providerUsage,\n      root.usage_metadata,\n      root.usageMetadata,\n      root.response_metadata?.usage_metadata,\n      root.responseMetadata?.usageMetadata,\n      root.llmOutput?.tokenUsage,\n    ].filter(Boolean);\n    for (const usage of candidates) {\n      const input = finiteNumber(\n        usage.promptTokens ??\n        usage.inputTokens ??\n        usage.input_tokens ??\n        usage.promptTokenCount\n      );\n      const output = finiteNumber(\n        usage.completionTokens ??\n        usage.outputTokens ??\n        usage.output_tokens ??\n        usage.candidatesTokenCount\n      );\n      const total = finiteNumber(\n        usage.totalTokens ??\n        usage.total_tokens ??\n        usage.totalTokenCount\n      );\n      if (input !== undefined || output !== undefined || total !== undefined) {\n        return {\n          input: input ?? -1,\n          output: output ?? -1,\n          total: total ?? (\n            input !== undefined && output !== undefined ? input + output : -1\n          ),\n          available: true,\n        };\n      }\n    }\n  }\n  return { input: -1, output: -1, total: -1, available: false };\n}\n\nfunction normalizeText(value) {\n  return String(value ?? '')\n    .normalize('NFD')\n    .replace(/[\\u0300-\\u036f]/g, '')\n    .replace(/\\s+/g, ' ')\n    .trim()\n    .toLowerCase();\n}\n\nconst baselineOutput = String(merged.baseline_output ?? '');\nconst optimizedOutput = String(merged.optimized_output ?? '');\nconst baselineTelemetry = merged.modelTelemetry?.baseline || {};\nconst optimizedTelemetry = merged.modelTelemetry?.optimized || {};\nconst baselineUsage = extractUsage(baselineTelemetry);\nconst optimizedUsage = extractUsage(optimizedTelemetry);\nconst optimization = optimizedTelemetry.optimization || {};\nconst realUsageAvailable = baselineUsage.available && optimizedUsage.available;\nconst savedInputTokens = realUsageAvailable\n  ? baselineUsage.input - optimizedUsage.input\n  : -1;\nconst savingsPercent = realUsageAvailable && baselineUsage.input > 0\n  ? Number(((savedInputTokens / baselineUsage.input) * 100).toFixed(2))\n  : -1;\nconst sameResponse =\n  normalizeText(baselineOutput) === normalizeText(optimizedOutput);\nconst qualityCheckRan = String(normalized.chatInput)\n  .trim()\n  .toUpperCase()\n  .startsWith('COMPARAR:');\nconst expectedFacts = [\n  'atlas',\n  'curitiba/pr',\n  'fran-4271',\n  'r$ 850.000,00',\n  '05/08/2026',\n  '14:30',\n];\nconst baselineNormalized = normalizeText(baselineOutput);\nconst optimizedNormalized = normalizeText(optimizedOutput);\nconst factsPreserved = qualityCheckRan\n  ? expectedFacts.every((fact) => {\n      const normalizedFact = normalizeText(fact);\n      return baselineNormalized.includes(normalizedFact) &&\n        optimizedNormalized.includes(normalizedFact);\n    })\n  : false;\n\nreturn [{\n  json: {\n    session_id: normalized.sessionId,\n    execution_id: String($execution.id),\n    created_at: new Date().toISOString(),\n    chat_input: normalized.chatInput,\n    baseline_output: baselineOutput,\n    optimized_output: optimizedOutput,\n    baseline_input_tokens: baselineUsage.input,\n    baseline_output_tokens: baselineUsage.output,\n    optimized_input_tokens: optimizedUsage.input,\n    optimized_output_tokens: optimizedUsage.output,\n    saved_input_tokens: savedInputTokens,\n    savings_percent: savingsPercent,\n    messages_before: finiteNumber(optimization.messagesBefore) ?? -1,\n    messages_after: finiteNumber(optimization.messagesAfter) ?? -1,\n    estimated_before: finiteNumber(optimization.tokensBeforeEstimated) ?? -1,\n    estimated_after: finiteNumber(optimization.tokensAfterEstimated) ?? -1,\n    same_response: sameResponse,\n    quality_check_ran: qualityCheckRan,\n    facts_preserved: factsPreserved,\n    measurement_type: realUsageAvailable ? 'real' : 'indisponivel',\n    fallback: Boolean(optimization.bypassReason),\n    bypass_reason: String(optimization.bypassReason ?? ''),\n  },\n}];"
+      },
+      "id": "compare-results",
+      "name": "Comparar e Consolidar",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2152,
+        -64
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "row",
+        "operation": "insert",
+        "dataTableId": {
+          "__rl": true,
+          "value": "lab_context_optimizer_ab_turns",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "session_id": "={{ $json.session_id }}",
+            "execution_id": "={{ $json.execution_id }}",
+            "created_at": "={{ $json.created_at }}",
+            "chat_input": "={{ $json.chat_input }}",
+            "baseline_output": "={{ $json.baseline_output }}",
+            "optimized_output": "={{ $json.optimized_output }}",
+            "baseline_input_tokens": "={{ $json.baseline_input_tokens }}",
+            "baseline_output_tokens": "={{ $json.baseline_output_tokens }}",
+            "optimized_input_tokens": "={{ $json.optimized_input_tokens }}",
+            "optimized_output_tokens": "={{ $json.optimized_output_tokens }}",
+            "saved_input_tokens": "={{ $json.saved_input_tokens }}",
+            "savings_percent": "={{ $json.savings_percent }}",
+            "messages_before": "={{ $json.messages_before }}",
+            "messages_after": "={{ $json.messages_after }}",
+            "estimated_before": "={{ $json.estimated_before }}",
+            "estimated_after": "={{ $json.estimated_after }}",
+            "same_response": "={{ $json.same_response }}",
+            "quality_check_ran": "={{ $json.quality_check_ran }}",
+            "facts_preserved": "={{ $json.facts_preserved }}",
+            "measurement_type": "={{ $json.measurement_type }}",
+            "fallback": "={{ $json.fallback }}",
+            "bypass_reason": "={{ $json.bypass_reason }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "session_id",
+              "displayName": "session_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "execution_id",
+              "displayName": "execution_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "date",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "chat_input",
+              "displayName": "chat_input",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "baseline_output",
+              "displayName": "baseline_output",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "optimized_output",
+              "displayName": "optimized_output",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "baseline_input_tokens",
+              "displayName": "baseline_input_tokens",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "baseline_output_tokens",
+              "displayName": "baseline_output_tokens",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "optimized_input_tokens",
+              "displayName": "optimized_input_tokens",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "optimized_output_tokens",
+              "displayName": "optimized_output_tokens",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "saved_input_tokens",
+              "displayName": "saved_input_tokens",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "savings_percent",
+              "displayName": "savings_percent",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "messages_before",
+              "displayName": "messages_before",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "messages_after",
+              "displayName": "messages_after",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "estimated_before",
+              "displayName": "estimated_before",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "estimated_after",
+              "displayName": "estimated_after",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "same_response",
+              "displayName": "same_response",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "boolean",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "quality_check_ran",
+              "displayName": "quality_check_ran",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "boolean",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "facts_preserved",
+              "displayName": "facts_preserved",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "boolean",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "measurement_type",
+              "displayName": "measurement_type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "fallback",
+              "displayName": "fallback",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "boolean",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "bypass_reason",
+              "displayName": "bypass_reason",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": true,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "insert-result",
+      "name": "Registrar Turno",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        2368,
+        -64
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "row",
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "lab_context_optimizer_ab_turns",
+          "mode": "name"
+        },
+        "returnAll": true,
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "session_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Comparar e Consolidar').item.json.session_id }}"
+            }
+          ]
+        },
+        "orderBy": false
+      },
+      "id": "read-session",
+      "name": "Ler Resultados da Sessão",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        2584,
+        -64
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const rows = $input.all()\n  .map((item) => item.json)\n  .filter((row) => row && Object.keys(row).length > 0);\nconst current = $('Comparar e Consolidar').first().json;\n\nfunction displayTokens(value) {\n  const number = Number(value);\n  return Number.isFinite(number) && number >= 0\n    ? number.toLocaleString('pt-BR')\n    : 'indisponível';\n}\n\nfunction displayPercent(value) {\n  const number = Number(value);\n  return Number.isFinite(number) && number >= 0\n    ? number.toLocaleString('pt-BR', {\n        minimumFractionDigits: 2,\n        maximumFractionDigits: 2,\n      }) + '%'\n    : 'indisponível';\n}\n\nconst measuredRows = rows.filter((row) =>\n  Number(row.baseline_input_tokens) >= 0 &&\n  Number(row.optimized_input_tokens) >= 0\n);\nconst cumulativeBaseline = measuredRows.reduce(\n  (sum, row) => sum + Number(row.baseline_input_tokens),\n  0\n);\nconst cumulativeOptimized = measuredRows.reduce(\n  (sum, row) => sum + Number(row.optimized_input_tokens),\n  0\n);\nconst cumulativeSaved = cumulativeBaseline - cumulativeOptimized;\nconst cumulativePercent = cumulativeBaseline > 0\n  ? (cumulativeSaved / cumulativeBaseline) * 100\n  : -1;\nconst quality = current.quality_check_ran\n  ? (current.facts_preserved ? '100% dos fatos do roteiro preservados' : 'FALHOU — fato ausente')\n  : 'não executada neste turno';\nconst messageCount = Number(current.messages_before) >= 0\n  ? displayTokens(current.messages_before) + ' → ' + displayTokens(current.messages_after)\n  : 'indisponível';\n\nconst output = [\n  '## BASELINE',\n  current.baseline_output,\n  '',\n  '**Input real:** ' + displayTokens(current.baseline_input_tokens),\n  '**Output real:** ' + displayTokens(current.baseline_output_tokens),\n  '',\n  '## OTIMIZADO',\n  current.optimized_output,\n  '',\n  '**Input real:** ' + displayTokens(current.optimized_input_tokens),\n  '**Output real:** ' + displayTokens(current.optimized_output_tokens),\n  '**Mensagens antes → depois:** ' + messageCount,\n  '',\n  '## RESULTADO',\n  '**Economia do turno:** ' + displayTokens(current.saved_input_tokens) +\n    ' tokens (' + displayPercent(current.savings_percent) + ')',\n  '**Economia acumulada:** ' + displayTokens(cumulativeSaved) +\n    ' tokens (' + displayPercent(cumulativePercent) + ')',\n  '**Turnos medidos:** ' + measuredRows.length,\n  '**Respostas idênticas:** ' + (current.same_response ? 'sim' : 'não'),\n  '**Qualidade:** ' + quality,\n  '**Medição:** ' + current.measurement_type,\n  '**Fallback/bypass:** ' + (current.fallback\n    ? 'sim — ' + current.bypass_reason\n    : 'não'),\n].join('\\n');\n\nreturn [{\n  json: {\n    output,\n    session_id: current.session_id,\n    execution_id: current.execution_id,\n    baseline_input_tokens: current.baseline_input_tokens,\n    optimized_input_tokens: current.optimized_input_tokens,\n    saved_input_tokens: current.saved_input_tokens,\n    savings_percent: current.savings_percent,\n    cumulative_saved_tokens: cumulativeSaved,\n    cumulative_savings_percent: cumulativePercent,\n    facts_preserved: current.facts_preserved,\n    same_response: current.same_response,\n    measurement_type: current.measurement_type,\n  },\n}];"
+      },
+      "id": "final-report",
+      "name": "Responder no Chat",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2800,
+        -64
+      ]
+    }
+  ],
+  "connections": {
+    "Chat A/B — Mensagens Reais": {
+      "main": [
+        [
+          {
+            "node": "Criar ou Reutilizar Tabela",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Criar ou Reutilizar Tabela": {
+      "main": [
+        [
+          {
+            "node": "Normalizar Entrada",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalizar Entrada": {
+      "main": [
+        [
+          {
+            "node": "Agente Baseline",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Agente Otimizado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini 2.5 Flash — Baseline": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Measured Chat Model — Baseline",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Measured Chat Model — Baseline": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Agente Baseline",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Memória — Baseline": {
+      "ai_memory": [
+        [
+          {
+            "node": "Agente Baseline",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agente Baseline": {
+      "main": [
+        [
+          {
+            "node": "Resultado Baseline",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resultado Baseline": {
+      "main": [
+        [
+          {
+            "node": "Unir Resultados A/B",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini 2.5 Flash — Otimizado": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Optimized Chat Model — Balanced",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Optimized Chat Model — Balanced": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Agente Otimizado",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Memória — Otimizada": {
+      "ai_memory": [
+        [
+          {
+            "node": "Agente Otimizado",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agente Otimizado": {
+      "main": [
+        [
+          {
+            "node": "Resultado Otimizado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resultado Otimizado": {
+      "main": [
+        [
+          {
+            "node": "Unir Resultados A/B",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Unir Resultados A/B": {
+      "main": [
+        [
+          {
+            "node": "Token Analytics — Uso Real A/B",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Token Analytics — Uso Real A/B": {
+      "main": [
+        [
+          {
+            "node": "Comparar e Consolidar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Comparar e Consolidar": {
+      "main": [
+        [
+          {
+            "node": "Registrar Turno",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Registrar Turno": {
+      "main": [
+        [
+          {
+            "node": "Ler Resultados da Sessão",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ler Resultados da Sessão": {
+      "main": [
+        [
+          {
+            "node": "Responder no Chat",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/Sao_Paulo",
+    "availableInMCP": false
+  },
+  "staticData": null,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "tags": [],
+  "versionId": "67fb50b0-46a5-43c2-b15e-720098383b23"
+}

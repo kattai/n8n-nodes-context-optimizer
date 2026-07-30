@@ -1,0 +1,68 @@
+{
+  "workflowId": "tokenSaverProfileComparison60",
+  "executionId": 99,
+  "executionStatus": "error",
+  "datasetRecords": 60,
+  "model": "models/gemini-2.5-flash",
+  "packageVersion": "0.4.5",
+  "totalTestInputTokens": 41612,
+  "baseline": {
+    "inputTokens": 17048,
+    "outputTokens": 86,
+    "totalTokens": 17872,
+    "calls": 2,
+    "output": "Lead: LEAD-1942\nCidade: Campinas/SP\nCapital: R$ 850.000,00\nReunião: 05/08/2026 14:30\nAprovado: false"
+  },
+  "profiles": [
+    {
+      "profile": "Maximum Quality",
+      "before": 17048,
+      "after": 8192,
+      "saved": 8856,
+      "percent": 51.95,
+      "measurement": "provider",
+      "factsPreserved": true,
+      "outputMatchesBaseline": true,
+      "providerUsage": {
+        "inputTokens": 8192,
+        "outputTokens": 88,
+        "totalTokens": 8836,
+        "calls": 2
+      }
+    },
+    {
+      "profile": "Balanced",
+      "before": 17048,
+      "after": 8178,
+      "saved": 8870,
+      "percent": 52.03,
+      "measurement": "provider",
+      "factsPreserved": true,
+      "outputMatchesBaseline": true,
+      "providerUsage": {
+        "inputTokens": 8178,
+        "outputTokens": 86,
+        "totalTokens": 8821,
+        "calls": 2
+      }
+    },
+    {
+      "profile": "Maximum Savings",
+      "before": 17048,
+      "after": 8194,
+      "saved": 8854,
+      "percent": 51.94,
+      "measurement": "provider",
+      "factsPreserved": true,
+      "outputMatchesBaseline": true,
+      "providerUsage": {
+        "inputTokens": 8194,
+        "outputTokens": 88,
+        "totalTokens": 8846,
+        "calls": 2
+      }
+    }
+  ],
+  "allFactsPreserved": true,
+  "allOutputsMatchBaseline": true
+}

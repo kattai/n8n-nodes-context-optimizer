@@ -1,0 +1,36 @@
+{
+  "generatedAt": "2026-07-30T14:20:45.861Z",
+  "workflowId": "contextOptimizerMessageHistoryAB",
+  "workflowName": "[LAB] Chat A/B — Histórico Baseline x Otimizado",
+  "model": "models/gemini-2.5-flash",
+  "repetitive": {
+    "sessionId": "ab-proof-20260730-c",
+    "executionId": 75,
+    "baselineInputTokens": 941,
+    "optimizedInputTokens": 351,
+    "savedInputTokens": 590,
+    "savingsPercent": 62.7,
+    "cumulativeSavedTokens": 2335,
+    "cumulativeSavingsPercent": 47.84836065573771,
+    "sameResponse": true,
+    "factsPreserved": true,
+    "inputTokenBasis": "provider-actual",
+    "messagesBefore": 16,
+    "messagesAfter": 6
+  },
+  "uniqueControl": {
+    "sessionId": "ab-control-20260730-a",
+    "executionId": 83,
+    "baselineInputTokens": 320,
+    "optimizedInputTokens": 304,
+    "savedInputTokens": 16,
+    "savingsPercent": 5,
+    "cumulativeSavedTokens": 42,
+    "cumulativeSavingsPercent": 2.2888283378746594,
+    "sameResponse": true,
+    "factsPreserved": true,
+    "inputTokenBasis": "provider-actual",
+    "messagesBefore": 14,
+    "messagesAfter": 11
+  }
+}

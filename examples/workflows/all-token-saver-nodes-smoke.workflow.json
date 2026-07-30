@@ -1,0 +1,339 @@
+{
+  "id": "tokenSaverAllNodesSmoke",
+  "name": "[LAB] Token Saver — Smoke Test dos 5 Nodes",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## Smoke test integrado\n\nExecuta os **cinco nodes do pacote** numa única chamada local.\n\n1. Content compacta JSON\n2. Savings mede\n3. Store guarda o original\n4. Retriever recupera um registro exato\n5. Chat Model entrega o modelo ao agente\n\nO último node falha a validação se qualquer fato exato desaparecer.",
+        "height": 360,
+        "width": 3200,
+        "color": 5
+      },
+      "id": "note-overview",
+      "name": "00 — Objetivo",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -960,
+        -600
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Conteúdo e armazenamento\n\nA base tem 120 registros. As saídas simples carregam apenas o contexto compacto, a economia e o recibo; o original não segue pelo fluxo.",
+        "height": 620,
+        "width": 1500,
+        "color": 6
+      },
+      "id": "note-process",
+      "name": "01 — Compactar e armazenar",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -960,
+        -180
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Recuperação exata\n\nO agente recebe somente o resourceId e o path `records[42]`. A tool recupera o objeto original, e a validação exige 5/5 fatos.",
+        "height": 620,
+        "width": 1620,
+        "color": 7
+      },
+      "id": "note-retrieval",
+      "name": "02 — Recuperar e validar",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        620,
+        -180
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "token-saver-all-nodes-smoke",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "smoke-webhook",
+      "name": "Executar Smoke Test",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -840,
+        80
+      ],
+      "webhookId": "b26e89c7-17e2-4c18-b0c2-d554081bf14a"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const records = Array.from({ length: 120 }, (_, index) => ({\n  lead_identifier: 'SMOKE-' + String(index).padStart(3, '0'),\n  franchise_city_of_interest: index === 42 ? 'Ribeirão Preto/SP' : ['Campinas/SP', 'Curitiba/PR', 'Goiânia/GO'][index % 3],\n  declared_available_investment_capital: index === 42 ? 'R$ 975.000,00' : 'R$ 600.000,00',\n  next_expansion_meeting: index === 42 ? '12/08/2026 10:30' : null,\n  eligibility_approved: index === 42,\n  responsible_team: 'Expansão Casa do Construtor',\n  operational_note: 'Use somente os dados exatos deste registro; não invente valores ausentes.'\n}));\nreturn [{ json: {\n  content: JSON.stringify({ source: 'smoke-test', total_records: records.length, records }),\n  expected: {\n    lead: 'SMOKE-042',\n    city: 'Ribeirão Preto/SP',\n    capital: 'R$ 975.000,00',\n    meeting: '12/08/2026 10:30',\n    approved: true\n  }\n} }];"
+      },
+      "id": "generate-json",
+      "name": "Gerar Base JSON",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -600,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "optimizeContent",
+        "content": "={{ $json.content }}",
+        "contentType": "json",
+        "currentTask": "Localizar o registro SMOKE-042",
+        "protectedValues": "SMOKE-042\nRibeirão Preto/SP\nR$ 975.000,00\n12/08/2026 10:30\ntrue",
+        "enableVirtualization": false,
+        "outputDetail": "simple"
+      },
+      "id": "content-optimizer",
+      "name": "Token Saver Content — JSON",
+      "type": "n8n-nodes-context-optimizer.contextOptimizer",
+      "typeVersion": 1,
+      "position": [
+        -360,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "analyze",
+        "metrics": "={{ $json }}",
+        "outputDetail": "simple"
+      },
+      "id": "content-analytics",
+      "name": "Token Savings — Conteúdo",
+      "type": "n8n-nodes-context-optimizer.tokenAnalytics",
+      "typeVersion": 1,
+      "position": [
+        -120,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "store",
+        "content": "={{ $('Gerar Base JSON').item.json.content }}",
+        "contentType": "json",
+        "scope": "token-saver-all-nodes-smoke",
+        "fields": "lead_identifier, franchise_city_of_interest, declared_available_investment_capital, next_expansion_meeting, eligibility_approved",
+        "recordCount": 120,
+        "ttlHours": 1,
+        "maxResourceMegabytes": 10,
+        "outputDetail": "simple"
+      },
+      "id": "context-store",
+      "name": "Token Saver Store — Original",
+      "type": "n8n-nodes-context-optimizer.contextStore",
+      "typeVersion": 1,
+      "position": [
+        120,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Recurso: {{ $json.resourceId }}\nUse retrieve_context com operation=get_exact_value, resourceId={{ $json.resourceId }} e path=records[42].",
+        "options": {
+          "systemMessage": "Você valida recuperação exata de contexto.\nExecute exatamente uma vez a tool retrieve_context com operation get_exact_value e o path solicitado.\nUse somente a resposta da tool. Nunca invente dados.\nResponda exatamente em cinco linhas, sem introdução:\nLead: [lead_identifier]\nCidade: [franchise_city_of_interest]\nCapital: [declared_available_investment_capital]\nReunião: [next_expansion_meeting]\nAprovado: [eligibility_approved em minúsculas]",
+          "maxIterations": 3,
+          "returnIntermediateSteps": false,
+          "enableStreaming": false
+        }
+      },
+      "id": "retrieval-agent",
+      "name": "Agente — Recuperar Registro Exato",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        800,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-2.5-flash",
+        "options": {
+          "temperature": 0,
+          "maxOutputTokens": 1024
+        }
+      },
+      "id": "gemini",
+      "name": "Gemini 2.5 Flash — Smoke",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1.1,
+      "position": [
+        560,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "behavior": "optimizeAndMeasure",
+        "profile": "balanced"
+      },
+      "id": "model-wrapper",
+      "name": "Token Saver Chat Model — Smoke",
+      "type": "n8n-nodes-context-optimizer.optimizedChatModel",
+      "typeVersion": 1,
+      "position": [
+        800,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "toolDescription": "Recupera valores exatos do recurso informado. Para este teste use get_exact_value no path records[42].",
+        "scope": "token-saver-all-nodes-smoke",
+        "maxResults": 5,
+        "maxTokens": 1000,
+        "maxCalls": 2,
+        "blockedFields": "password, secret, apiKey",
+        "allowFullOriginal": false
+      },
+      "id": "retriever",
+      "name": "Token Saver Retriever — Exato",
+      "type": "n8n-nodes-context-optimizer.contextRetrieverTool",
+      "typeVersion": 1,
+      "position": [
+        1040,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const output = String($input.first().json.output || '');\nconst expected = $('Gerar Base JSON').first().json.expected;\nconst normalized = output.normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').toLowerCase();\nconst exactFacts = [expected.lead, expected.city, expected.capital, expected.meeting, String(expected.approved)];\nconst factsPreserved = exactFacts.every((fact) => normalized.includes(String(fact).normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').toLowerCase()));\nconst contentSavings = $('Token Saver Content — JSON').first().json.tokenSavings;\nconst analyzedSavings = $('Token Savings — Conteúdo').first().json.tokenSavings;\nconst store = $('Token Saver Store — Original').first().json;\nconst report = [\n  '## Smoke test dos cinco nodes',\n  '**Token Saver Content:** ' + contentSavings.before + ' → ' + contentSavings.after + ' (' + contentSavings.percent + '%)',\n  '**Token Savings:** ' + analyzedSavings.saved + ' tokens estimados economizados',\n  '**Token Saver Store:** recurso ' + store.resourceId + ', original não devolvido na saída',\n  '**Token Saver Retriever:** registro exato recuperado pelo agente',\n  '**Token Saver Chat Model:** chamada concluída com Gemini 2.5 Flash',\n  '**5/5 fatos preservados:** ' + (factsPreserved ? 'sim' : 'não'),\n  '',\n  output\n].join('\\n');\nreturn [{ json: {\n  output: report,\n  passed: factsPreserved && Boolean(store.stored) && contentSavings.saved > 0,\n  nodes_tested: ['Token Saver Content', 'Token Savings', 'Token Saver Store', 'Token Saver Chat Model', 'Token Saver Retriever'],\n  content_savings: contentSavings,\n  resource_id: store.resourceId,\n  original_leaked_by_simple_outputs: Object.hasOwn($('Token Saver Content — JSON').first().json, 'content') || Object.hasOwn(store, 'content'),\n  retrieved_output: output,\n  facts_preserved: factsPreserved\n} }];"
+      },
+      "id": "validate-all",
+      "name": "Validar os 5 Nodes",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1240,
+        80
+      ]
+    }
+  ],
+  "connections": {
+    "Executar Smoke Test": {
+      "main": [
+        [
+          {
+            "node": "Gerar Base JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gerar Base JSON": {
+      "main": [
+        [
+          {
+            "node": "Token Saver Content — JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Token Saver Content — JSON": {
+      "main": [
+        [
+          {
+            "node": "Token Savings — Conteúdo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Token Savings — Conteúdo": {
+      "main": [
+        [
+          {
+            "node": "Token Saver Store — Original",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Token Saver Store — Original": {
+      "main": [
+        [
+          {
+            "node": "Agente — Recuperar Registro Exato",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini 2.5 Flash — Smoke": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Token Saver Chat Model — Smoke",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Token Saver Chat Model — Smoke": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Agente — Recuperar Registro Exato",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Token Saver Retriever — Exato": {
+      "ai_tool": [
+        [
+          {
+            "node": "Agente — Recuperar Registro Exato",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agente — Recuperar Registro Exato": {
+      "main": [
+        [
+          {
+            "node": "Validar os 5 Nodes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/Sao_Paulo",
+    "availableInMCP": false
+  },
+  "staticData": null,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "tags": [],
+  "versionId": "894157f1-809c-4a2d-9ddf-4e256b7df881"
+}

@@ -1,0 +1,40 @@
+{
+  "version": "0.3.0",
+  "results": [
+    {
+      "case": "Texto repetido",
+      "originalTokensEstimated": 1167,
+      "optimizedTokensEstimated": 20,
+      "savingsPercentEstimated": 98.29,
+      "qualityPassed": true
+    },
+    {
+      "case": "JSON tabular",
+      "originalTokensEstimated": 6884,
+      "optimizedTokensEstimated": 3348,
+      "savingsPercentEstimated": 51.37,
+      "qualityPassed": true
+    },
+    {
+      "case": "Logs repetidos",
+      "originalTokensEstimated": 2717,
+      "optimizedTokensEstimated": 20,
+      "savingsPercentEstimated": 99.26,
+      "qualityPassed": true
+    },
+    {
+      "case": "Texto único",
+      "originalTokensEstimated": 10,
+      "optimizedTokensEstimated": 10,
+      "savingsPercentEstimated": 0,
+      "fallbackReason": "no_positive_savings"
+    },
+    {
+      "case": "Código/YAML",
+      "originalTokensEstimated": 17,
+      "optimizedTokensEstimated": 17,
+      "savingsPercentEstimated": 0,
+      "strategy": "preserve-code"
+    }
+  ]
+}

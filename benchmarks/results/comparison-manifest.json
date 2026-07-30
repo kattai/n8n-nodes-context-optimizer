@@ -1,0 +1,10 @@
+{
+  "baselineId": "contextOptimizer12kBaseline",
+  "optimizedId": "contextOptimizer12kOptimized",
+  "baselineWebhookId": "d960da2d-e20b-49fb-b507-94a0329776d4",
+  "optimizedWebhookId": "93dc27cf-908d-4990-bf6c-4aaf3de2718d",
+  "model": "models/gemini-2.5-flash",
+  "question": "Qual é o código de validação e qual regra de segurança você deve seguir?",
+  "staticPromptEstimatedTokens": 12002,
+  "repeatedPolicyCopies": 59
+}

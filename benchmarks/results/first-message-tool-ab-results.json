@@ -1,0 +1,42 @@
+{
+  "workflowId": "tokenSaverFirstMessageToolAB",
+  "workflowName": "[LAB] Token Saver — Primeira Mensagem com Tool Real",
+  "executionId": 94,
+  "status": "success",
+  "startedAt": "2026-07-30 15:16:44.362",
+  "stoppedAt": "2026-07-30 15:17:04.883",
+  "packageVersion": "0.4.2",
+  "model": "models/gemini-2.5-flash",
+  "datasetRecords": 240,
+  "firstMessageTest": true,
+  "tokenSavings": {
+    "before": 66080,
+    "after": 30396,
+    "saved": 35684,
+    "percent": 54,
+    "measurement": "provider",
+    "qualityPassed": true
+  },
+  "factsPreserved": true,
+  "baselineOutput": "Lead: LEAD-2048\nCidade: Campinas/SP\nCapital: R$ 850.000,00\nReunião: 05/08/2026 14:30\nAprovado: false",
+  "optimizedOutput": "Lead: LEAD-2048\nCidade: Campinas/SP\nCapital: R$ 850.000,00\nReunião: 05/08/2026 14:30\nAprovado: false",
+  "optimization": {
+    "operation": "invoke",
+    "profile": "balanced",
+    "messagesBefore": 4,
+    "messagesAfter": 4,
+    "tokensBeforeEstimated": 49448,
+    "tokensAfterEstimated": 23574,
+    "savingsTokensEstimated": 25874,
+    "savingsPercentEstimated": 52.33,
+    "protectedFactsCount": 781,
+    "tokensAreEstimated": true,
+    "bypassReason": "tool_sequence_content_only"
+  },
+  "providerUsage": {
+    "inputTokens": 30396,
+    "outputTokens": 59,
+    "totalTokens": 31003,
+    "available": true
+  }
+}
