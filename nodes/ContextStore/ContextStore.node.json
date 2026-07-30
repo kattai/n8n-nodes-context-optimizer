@@ -1,0 +1,17 @@
+{
+	"node": "n8n-nodes-context-optimizer.contextStore",
+	"nodeVersion": "1.0",
+	"codexVersion": "1.0",
+	"details": "Keeps large original context outside the AI prompt with gzip, SHA-256 verification, scope isolation, and TTL.",
+	"categories": ["Data & Transformation"],
+	"resources": {
+		"primaryDocumentation": [
+			{
+				"url": "https://github.com/kattai/n8n-nodes-context-optimizer"
+			}
+		]
+	},
+	"subcategories": {
+		"Data & Transformation": ["Text"]
+	}
+}

@@ -1,0 +1,8 @@
+dist
+node_modules
+.scaffold-git-backup
+coverage
+*.tgz
+.env
+.env.*
+.n8n

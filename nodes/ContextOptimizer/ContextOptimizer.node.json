@@ -1,0 +1,17 @@
+{
+	"node": "n8n-nodes-context-optimizer.contextOptimizer",
+	"nodeVersion": "1.0",
+	"codexVersion": "1.0",
+	"details": "Compresses large JSON, API responses, logs, HTML, RAG, tool output, and static prompts before they enter an AI context.",
+	"categories": ["Data & Transformation"],
+	"resources": {
+		"primaryDocumentation": [
+			{
+				"url": "https://github.com/kattai/n8n-nodes-context-optimizer"
+			}
+		]
+	},
+	"subcategories": {
+		"Data & Transformation": ["Text"]
+	}
+}

@@ -1,0 +1,147 @@
+import type { ModelOptimizationMetrics } from '../model-wrapper/wrap-language-model';
+
+export interface ProviderUsageTelemetry {
+	inputTokens?: number;
+	outputTokens?: number;
+	totalTokens?: number;
+	cachedInputTokens?: number;
+	reasoningTokens?: number;
+	available: boolean;
+}
+
+export interface ModelTelemetryRecord {
+	executionId: string;
+	nodeName: string;
+	recordedAt: string;
+	optimization: ModelOptimizationMetrics;
+	providerUsage: ProviderUsageTelemetry;
+}
+
+const MAX_EXECUTIONS = 200;
+const RECORD_TTL_MS = 24 * 60 * 60 * 1000;
+const registry = new Map<string, Map<string, ModelTelemetryRecord>>();
+
+function sumOptional(left?: number, right?: number): number | undefined {
+	if (left === undefined && right === undefined) return undefined;
+	return (left ?? 0) + (right ?? 0);
+}
+
+function percentage(before: number, after: number): number {
+	if (before <= 0) return 0;
+	return Number((((before - after) / before) * 100).toFixed(2));
+}
+
+function mergeRecords(
+	previous: ModelTelemetryRecord,
+	current: ModelTelemetryRecord,
+): ModelTelemetryRecord {
+	const before = previous.optimization.tokensBeforeEstimated + current.optimization.tokensBeforeEstimated;
+	const after = previous.optimization.tokensAfterEstimated + current.optimization.tokensAfterEstimated;
+	const eligibleBefore =
+		previous.optimization.eligibleTokensBefore + current.optimization.eligibleTokensBefore;
+	const eligibleAfter =
+		previous.optimization.eligibleTokensAfter + current.optimization.eligibleTokensAfter;
+	const targetBandReached = eligibleBefore > 0 && eligibleAfter / eligibleBefore <= 0.3;
+	return {
+		...current,
+		optimization: {
+			...current.optimization,
+			messagesBefore:
+				previous.optimization.messagesBefore + current.optimization.messagesBefore,
+			messagesAfter:
+				previous.optimization.messagesAfter + current.optimization.messagesAfter,
+			tokensBeforeEstimated: before,
+			tokensAfterEstimated: after,
+			savingsTokensEstimated: Math.max(0, before - after),
+			savingsPercentEstimated: percentage(before, after),
+			protectedFactsCount:
+				previous.optimization.protectedFactsCount + current.optimization.protectedFactsCount,
+			eligibleTokensBefore: eligibleBefore,
+			eligibleTokensAfter: eligibleAfter,
+			eligibleSavingsPercent: percentage(eligibleBefore, eligibleAfter),
+			virtualizedResourceIds: [
+				...new Set([
+					...previous.optimization.virtualizedResourceIds,
+					...current.optimization.virtualizedResourceIds,
+				]),
+			],
+			retrievalRequired:
+				previous.optimization.retrievalRequired || current.optimization.retrievalRequired,
+			targetBandReached,
+			targetNotReachedReason: targetBandReached
+				? undefined
+				: current.optimization.targetNotReachedReason ??
+					previous.optimization.targetNotReachedReason,
+			storageFallbackUsed:
+				previous.optimization.storageFallbackUsed || current.optimization.storageFallbackUsed,
+			bypassReason:
+				current.optimization.bypassReason ?? previous.optimization.bypassReason,
+		},
+		providerUsage: {
+			inputTokens: sumOptional(
+				previous.providerUsage.inputTokens,
+				current.providerUsage.inputTokens,
+			),
+			outputTokens: sumOptional(
+				previous.providerUsage.outputTokens,
+				current.providerUsage.outputTokens,
+			),
+			totalTokens: sumOptional(
+				previous.providerUsage.totalTokens,
+				current.providerUsage.totalTokens,
+			),
+			cachedInputTokens: sumOptional(
+				previous.providerUsage.cachedInputTokens,
+				current.providerUsage.cachedInputTokens,
+			),
+			reasoningTokens: sumOptional(
+				previous.providerUsage.reasoningTokens,
+				current.providerUsage.reasoningTokens,
+			),
+			available: previous.providerUsage.available || current.providerUsage.available,
+		},
+	};
+}
+
+function pruneRegistry(now = Date.now()): void {
+	for (const [executionId, records] of registry) {
+		for (const [nodeName, record] of records) {
+			const recordedAt = Date.parse(record.recordedAt);
+			if (!Number.isFinite(recordedAt) || now - recordedAt > RECORD_TTL_MS) {
+				records.delete(nodeName);
+			}
+		}
+		if (records.size === 0) registry.delete(executionId);
+	}
+	while (registry.size > MAX_EXECUTIONS) {
+		const oldestExecutionId = registry.keys().next().value as string | undefined;
+		if (!oldestExecutionId) return;
+		registry.delete(oldestExecutionId);
+	}
+}
+
+export function recordModelTelemetry(record: ModelTelemetryRecord): void {
+	pruneRegistry();
+	const executionRecords =
+		registry.get(record.executionId) ?? new Map<string, ModelTelemetryRecord>();
+	const previous = executionRecords.get(record.nodeName);
+	executionRecords.set(record.nodeName, previous ? mergeRecords(previous, record) : record);
+	registry.set(record.executionId, executionRecords);
+	pruneRegistry();
+}
+
+export function getModelTelemetry(
+	executionId: string,
+	nodeName: string,
+): ModelTelemetryRecord | undefined {
+	pruneRegistry();
+	return registry.get(executionId)?.get(nodeName);
+}
+
+export function clearExecutionTelemetry(executionId: string): void {
+	registry.delete(executionId);
+}
+
+export function clearAllModelTelemetry(): void {
+	registry.clear();
+}

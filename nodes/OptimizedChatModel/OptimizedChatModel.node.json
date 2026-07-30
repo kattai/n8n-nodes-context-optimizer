@@ -1,0 +1,17 @@
+{
+	"node": "n8n-nodes-context-optimizer.optimizedChatModel",
+	"nodeVersion": "1.0",
+	"codexVersion": "1.0",
+	"details": "Connects between any n8n chat model and AI Agent to reduce repeated history and large tool results while preserving tool-call order.",
+	"categories": ["AI"],
+	"resources": {
+		"primaryDocumentation": [
+			{
+				"url": "https://github.com/kattai/n8n-nodes-context-optimizer"
+			}
+		]
+	},
+	"subcategories": {
+		"AI": ["Language Models"]
+	}
+}

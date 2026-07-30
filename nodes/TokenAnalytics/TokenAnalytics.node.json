@@ -1,0 +1,17 @@
+{
+	"node": "n8n-nodes-context-optimizer.tokenAnalytics",
+	"nodeVersion": "1.0",
+	"codexVersion": "1.0",
+	"details": "Returns a concise token-savings summary and optional detailed provider usage, overhead, cost, latency, and quality diagnostics.",
+	"categories": ["Data & Transformation"],
+	"resources": {
+		"primaryDocumentation": [
+			{
+				"url": "https://github.com/kattai/n8n-nodes-context-optimizer"
+			}
+		]
+	},
+	"subcategories": {
+		"Data & Transformation": ["Text"]
+	}
+}
