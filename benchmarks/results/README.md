@@ -1,6 +1,15 @@
 # Benchmarks do Context Saver
 
-## Resultado atual — 0.7.0
+## Resultado atual — 0.8.0
+
+- [Memória e lazy tools](memory-tools-v0.8.0.md): histórico crescente e 24 schemas de ferramentas.
+- Redução estimada: **92,27%** na memória enviada e **83,21%** nos schemas enviados.
+- Integridade definida pelo benchmark: **100%**; originais e fatos substituídos continuam recuperáveis.
+- Comando reproduzível: `npm run benchmark:v0.8`.
+
+As porcentagens descrevem o corpus determinístico. Baixa confiança, Quality, Cache Priority e structured output ambíguo mantêm todas as tools.
+
+## Resultado anterior — 0.7.0
 
 - [Perfis v2](profile-v2-results.md): 12 casos determinísticos por perfil em JSON/API, RAG e logs.
 - Medianas no conteúdo elegível: **Quality 25,11%**, **Balanced 59,73%**, **Savings 80,33%**.

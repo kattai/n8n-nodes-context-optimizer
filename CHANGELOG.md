@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.8.0 — 2026-07-31
+
+- Add Context Saver Memory with scoped sessions, current fact versioning, protected corrections and pending work, incremental summaries, recent windows, gzip archives, TTL, and atomic writes.
+- Add safe deferred tool binding for Savings and opt-in Balanced workflows with deterministic relevance, budgets, always-available tools, and recently used tools.
+- Keep every tool on low confidence, duplicate names, Quality, Cache Priority, forced/ambiguous structured output, or small tool sets.
+- Report tool-schema counts, estimated tokens, selection reason, and confidence alongside model optimization metrics.
+- Add local n8n runtime workflows and deterministic memory/many-tools benchmarks.
+- Validate 92.27% memory-context reduction and 83.21% tool-schema reduction on the v0.8 corpus with all defined integrity checks passing.
+
 ## 0.7.0 — 2026-07-31
 
 - Rename the public suite to Context Saver while preserving technical node identifiers and v1 workflow compatibility.

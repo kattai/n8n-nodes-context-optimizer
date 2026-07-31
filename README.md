@@ -105,7 +105,7 @@ Install the generated tarball in a local/self-hosted n8n user folder:
 
 ```powershell
 cd $HOME\.n8n\nodes
-npm install --save-exact C:\path\to\n8n-nodes-context-optimizer-0.7.0.tgz
+npm install --save-exact C:\path\to\n8n-nodes-context-optimizer-0.8.0.tgz
 ```
 
 Restart n8n after installation. The package targets n8n `2.18.5`. Filesystem resources are not encrypted; use a secured shared directory in queue mode and leave secret-like storage disabled unless explicitly required.
@@ -114,6 +114,7 @@ The package is currently private and is not published to npm.
 
 ## Evidence and design
 
+- [v0.8 memory and lazy-tools benchmark](benchmarks/results/memory-tools-v0.8.0.md)
 - [v0.7 profile benchmark](benchmarks/results/profile-v2-results.md)
 - [v0.7 design](docs/superpowers/specs/2026-07-31-context-saver-v2-design.md)
 - [v0.6 cache-aware benchmark](benchmarks/results/cache-aware-v0.6.0.md)

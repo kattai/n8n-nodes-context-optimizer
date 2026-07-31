@@ -1,0 +1,50 @@
+{
+  "benchmark": "Context Saver v0.8 memory and lazy tool schemas",
+  "version": "0.8.0",
+  "generatedFor": "2026-07-31 release",
+  "providerCalls": 0,
+  "measurement": "model-aware local token estimate",
+  "memory": {
+    "before": 11042,
+    "after": 854,
+    "saved": 10188,
+    "percent": 92.27,
+    "recentMessagesSent": 6,
+    "archivedMessages": 114,
+    "qualityChecks": {
+      "currentFactPresent": true,
+      "supersededFactNotCurrent": true,
+      "correctionProtected": true,
+      "pendingProtected": true,
+      "recentWindowExact": true,
+      "fullHistoryRecoverable": true,
+      "factHistoryRecoverable": true
+    },
+    "passed": true
+  },
+  "tools": {
+    "before": 4926,
+    "after": 827,
+    "saved": 4099,
+    "percent": 83.21,
+    "toolsBefore": 24,
+    "toolsAfter": 4,
+    "selectedNames": [
+      "calendar_check_availability",
+      "calendar_create_event",
+      "calendar_cancel_event",
+      "crm_find_contact"
+    ],
+    "confidence": 0.809,
+    "qualityChecks": {
+      "targetToolPresent": true,
+      "originalToolObjectsPreserved": true,
+      "selectionActuallyReachedProvider": true,
+      "selectionWasSafe": true,
+      "allToolsCounted": true
+    },
+    "passed": true
+  },
+  "passed": true,
+  "note": "Results describe this deterministic corpus; they are not guarantees for arbitrary workflows."
+}
