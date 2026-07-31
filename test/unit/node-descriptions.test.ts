@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ContextOptimizer } from '../../nodes/ContextOptimizer/ContextOptimizer.node';
+import { ContextMemory } from '../../nodes/ContextMemory/ContextMemory.node';
 import {
 	ContextRetrieverTool,
 	normalizeToolRequest,
@@ -18,15 +19,16 @@ function properties(node: { description: { properties: Array<{ name: string }> }
 }
 
 describe('Token Saver node descriptions', () => {
-	it('uses one cohesive product name across all five nodes', () => {
+	it('uses one cohesive product name across all six nodes', () => {
 		expect(new OptimizedChatModel().description.displayName).toBe('Context Saver Model');
 		expect(new ContextOptimizer().description.displayName).toBe('Context Saver Content');
 		expect(new ContextStore().description.displayName).toBe('Context Saver Store');
 		expect(new ContextRetrieverTool().description.displayName).toBe('Context Saver Retriever');
 		expect(new TokenAnalytics().description.displayName).toBe('Context Saver Metrics');
+		expect(new ContextMemory().description.displayName).toBe('Context Saver Memory');
 	});
 
-	it('defaults every node to light version 2 while keeping version 1 loadable', () => {
+	it('defaults the original five nodes to light version 2 while keeping version 1 loadable', () => {
 		for (const node of [
 			new OptimizedChatModel(),
 			new ContextOptimizer(),
@@ -37,6 +39,24 @@ describe('Token Saver node descriptions', () => {
 			expect(node.description.version).toEqual([1, 2]);
 			expect(node.description.defaultVersion).toBe(2);
 		}
+		expect(new ContextMemory().description.version).toBe(1);
+	});
+
+	it('exposes explicit session operations without pretending to be native agent memory', () => {
+		const memory = new ContextMemory();
+		const operation = property(memory, 'operation') as {
+			options: Array<{ value: string }>;
+		};
+		expect(operation.options.map((entry) => entry.value)).toEqual([
+			'build',
+			'delete',
+			'inspect',
+			'purgeExpired',
+			'update',
+		]);
+		expect(memory.description.inputs).toHaveLength(1);
+		expect(memory.description.outputs).toHaveLength(1);
+		expect(property(memory, 'recentWindow')).toMatchObject({ default: 6 });
 	});
 
 	it('defaults user-facing transform outputs to a simple shape', () => {

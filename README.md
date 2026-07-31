@@ -12,15 +12,16 @@ Select `Save Tokens`, `Balanced`, and `Automatic Hybrid`. The wrapper changes th
 
 ## Nodes
 
-| Node                                                             | Add it when                                                                 | Main result                                            |
-| ---------------------------------------------------------------- | --------------------------------------------------------------------------- | ------------------------------------------------------ |
-| [Context Saver Model](docs/nodes/context-saver-model.md)         | An AI Agent has chat history or large tool results                          | Optimized calls to any compatible n8n chat model       |
-| [Context Saver Content](docs/nodes/context-saver-content.md)     | JSON, API data, RAG, logs, HTML, or a static prompt exists before the Agent | Compact inline content or a recoverable preview        |
-| [Context Saver Store](docs/nodes/context-saver-store.md)         | Exact large data must remain available outside the prompt                   | Gzip resource with SHA-256, scope, TTL, and receipt    |
-| [Context Saver Retriever](docs/nodes/context-saver-retriever.md) | The Agent receives a Context Saver resource receipt                         | Small, exact, evidence-bearing retrievals              |
-| [Context Saver Metrics](docs/nodes/context-saver-metrics.md)     | Savings, provider usage, cost, or A/B evidence is required                  | Eligible, full-request, provider, and net measurements |
+| Node                                                             | Add it when                                                                 | Main result                                                |
+| ---------------------------------------------------------------- | --------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| [Context Saver Model](docs/nodes/context-saver-model.md)         | An AI Agent has chat history or large tool results                          | Optimized calls to any compatible n8n chat model           |
+| [Context Saver Content](docs/nodes/context-saver-content.md)     | JSON, API data, RAG, logs, HTML, or a static prompt exists before the Agent | Compact inline content or a recoverable preview            |
+| [Context Saver Store](docs/nodes/context-saver-store.md)         | Exact large data must remain available outside the prompt                   | Gzip resource with SHA-256, scope, TTL, and receipt        |
+| [Context Saver Retriever](docs/nodes/context-saver-retriever.md) | The Agent receives a Context Saver resource receipt                         | Small, exact, evidence-bearing retrievals                  |
+| [Context Saver Metrics](docs/nodes/context-saver-metrics.md)     | Savings, provider usage, cost, or A/B evidence is required                  | Eligible, full-request, provider, and net measurements     |
+| [Context Saver Memory](docs/nodes/context-saver-memory.md)       | Long conversations repeat growing history on every model call               | Current facts, protected items, summary, and recent window |
 
-Store, Retriever, and Metrics are optional. Do not add them when the Model node alone solves the workflow.
+Store, Retriever, Metrics, and Memory are optional. Do not add them when the Model node alone solves the workflow.
 
 ## Profiles
 

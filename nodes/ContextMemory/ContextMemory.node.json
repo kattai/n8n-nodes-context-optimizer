@@ -1,0 +1,17 @@
+{
+	"node": "n8n-nodes-context-optimizer.contextMemory",
+	"nodeVersion": "1.0",
+	"codexVersion": "1.0",
+	"details": "Context Saver Memory keeps current facts, structured state, protected items, summaries, and recent messages compact while older history remains recoverable.",
+	"categories": ["Data & Transformation"],
+	"resources": {
+		"primaryDocumentation": [
+			{
+				"url": "https://github.com/kattai/n8n-nodes-context-optimizer"
+			}
+		]
+	},
+	"subcategories": {
+		"Data & Transformation": ["Text"]
+	}
+}
