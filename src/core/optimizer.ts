@@ -3,6 +3,7 @@ import { normalizeSection, splitUnits } from './normalize';
 import { resolveProfile } from './profiles';
 import { extractProtectedFacts, validateProtectedFacts } from './protected-facts';
 import { estimateSections, estimateTokens } from './token-estimator';
+import { calculateNetSavings } from '../tokens/token-counter';
 import type {
 	FallbackReason,
 	OptimizeContextInput,
@@ -172,6 +173,11 @@ function createResult(
 	const after = estimateSections(Object.values(optimized));
 	const savingsTokens = Math.max(0, before - after);
 	const savingsPercent = before === 0 ? 0 : Number(((savingsTokens / before) * 100).toFixed(2));
+	const net = calculateNetSavings({
+		originalTokens: before,
+		sentTokens: after,
+		compressorTokens: options.compressorTokens,
+	});
 
 	return {
 		optimizedSystemPrompt: optimized.systemPrompt,
@@ -189,6 +195,9 @@ function createResult(
 			tokensAreEstimated: true,
 			savingsTokens,
 			savingsPercent,
+			grossSavingsTokens: net.grossTokens,
+			netSavingsTokens: net.netTokens,
+			netSavingsPercent: net.netPercent,
 			summaryModelUsed: options.summaryModelUsed,
 			compressorTokens: options.compressorTokens ?? 0,
 			protectedFactsCount: options.protectedFactsCount,
@@ -302,6 +311,25 @@ export async function optimizeContext(
 				protectedFactsCount: facts.length,
 				warnings: [`Missing protected values: ${validation.missing.join(', ')}`],
 				fallbackReason: 'protected_fact_missing',
+			});
+		}
+
+		const net = calculateNetSavings({
+			originalTokens: estimateSections(Object.values(original)),
+			sentTokens: estimateSections(Object.values(optimized)),
+			compressorTokens,
+		});
+		if (!net.useOptimized) {
+			return createResult(original, original, profile, startedAt, {
+				strategy: 'fallback',
+				summaryModelUsed,
+				compressorTokens,
+				protectedFactsCount: facts.length,
+				warnings: [
+					...warnings,
+					`Optimization skipped because net savings would be ${net.netTokens} tokens.`,
+				],
+				fallbackReason: 'negative_net_savings',
 			});
 		}
 

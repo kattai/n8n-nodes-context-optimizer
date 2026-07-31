@@ -55,6 +55,7 @@ export type FallbackReason =
 	| 'summary_error'
 	| 'empty_result'
 	| 'token_budget_unmet'
+	| 'negative_net_savings'
 	| 'internal_error';
 
 export interface OptimizationMetrics {
@@ -66,6 +67,9 @@ export interface OptimizationMetrics {
 	tokensAreEstimated: true;
 	savingsTokens: number;
 	savingsPercent: number;
+	grossSavingsTokens?: number;
+	netSavingsTokens?: number;
+	netSavingsPercent?: number;
 	summaryModelUsed: boolean;
 	compressorTokens: number;
 	protectedFactsCount: number;

@@ -1,9 +1,8 @@
-export function estimateTokens(text: string): number {
-	if (!text) return 0;
-	const words = text.match(/[\p{L}\p{N}_]+|[^\s\p{L}\p{N}_]/gu) ?? [];
-	const characterEstimate = Math.ceil(text.length / 4);
-	const lexicalEstimate = Math.ceil(words.length * 1.15);
-	return Math.max(1, Math.round((characterEstimate + lexicalEstimate) / 2));
+import { countTokens } from '../tokens/token-counter';
+import type { TokenCountOptions } from '../tokens/types';
+
+export function estimateTokens(text: string, options: TokenCountOptions = {}): number {
+	return countTokens(text, options).tokens;
 }
 
 export function estimateSections(sections: string[]): number {
