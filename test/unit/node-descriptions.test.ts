@@ -145,6 +145,23 @@ describe('Token Saver node descriptions', () => {
 		expect(property(chatModel, 'cachePrivacyNotice')).toMatchObject({ type: 'notice' });
 	});
 
+	it('offers safe lazy tool schemas only on the v2 model node', () => {
+		const options = property(new OptimizedChatModel(), 'toolSchemaOptions') as {
+			displayOptions: { show: Record<string, unknown> };
+			options: Array<{ name: string; default: unknown }>;
+		};
+		expect(options.displayOptions.show).toEqual({
+			'@version': [2],
+			behavior: ['optimizeAndMeasure'],
+		});
+		expect(options.options.find((entry) => entry.name === 'selectionMode')).toMatchObject({
+			default: 'automatic',
+		});
+		expect(options.options.find((entry) => entry.name === 'minimumToolCount')).toMatchObject({
+			default: 8,
+		});
+	});
+
 	it('keeps 0.5.2 workflows cache-neutral until the strategy is persisted', () => {
 		expect(resolveNodeCacheStrategy({ profile: 'balanced' })).toBe('ignore_cache_signals');
 		expect(resolveNodeCacheStrategy({ cacheStrategy: 'automatic_hybrid' })).toBe(

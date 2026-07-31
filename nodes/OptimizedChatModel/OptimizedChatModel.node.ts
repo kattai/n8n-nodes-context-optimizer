@@ -38,6 +38,21 @@ interface CacheNodeOptions {
 	minimumStablePrefixTokens?: number;
 }
 
+interface ToolSchemaNodeOptions {
+	alwaysAvailableTools?: string;
+	maximumSelectedTools?: number;
+	minimumToolCount?: number;
+	selectionMode?: 'automatic' | 'disabled' | 'select_when_safe';
+	tokenBudget?: number;
+}
+
+function namesList(value: string | undefined): string[] {
+	return String(value ?? '')
+		.split(/\r?\n|,/)
+		.map((entry) => entry.trim())
+		.filter(Boolean);
+}
+
 function normalizedDirectory(value: string): string {
 	return resolve(value.trim() || defaultStorageDirectory()).toLowerCase();
 }
@@ -303,6 +318,82 @@ export class OptimizedChatModel implements INodeType {
 				],
 			},
 			{
+				displayName: 'Tool Schema Selection',
+				name: 'toolSchemaOptions',
+				type: 'collection',
+				placeholder: 'Add Setting',
+				default: {},
+				displayOptions: {
+					show: { '@version': [2], behavior: ['optimizeAndMeasure'] },
+				},
+				description:
+					'Reduce schemas sent on each Agent call; low confidence and structured output always keep all tools',
+				options: [
+					{
+						displayName: 'Always Available Tool Names',
+						name: 'alwaysAvailableTools',
+						type: 'string',
+						default: '',
+						placeholder: 'search_orders, create_ticket',
+						description: 'Comma or newline-separated tool names that selection can never remove',
+					},
+					{
+						displayName: 'Maximum Selected Tools',
+						name: 'maximumSelectedTools',
+						type: 'number',
+						typeOptions: { minValue: 1, maxValue: 1000, numberPrecision: 0 },
+						default: 6,
+						description:
+							'Maximum relevant schemas kept inline; required and recently used tools may exceed this safety limit',
+					},
+					{
+						displayName: 'Minimum Tools Before Selection',
+						name: 'minimumToolCount',
+						type: 'number',
+						typeOptions: { minValue: 2, maxValue: 1000, numberPrecision: 0 },
+						default: 8,
+						description:
+							'Smaller tool sets remain complete because selection overhead is not worthwhile',
+					},
+					{
+						displayName: 'Selection Mode',
+						name: 'selectionMode',
+						type: 'options',
+						noDataExpression: true,
+						options: [
+							{
+								name: 'Automatic by Profile (Recommended)',
+								value: 'automatic',
+								description:
+									'Quality and Balanced keep all schemas; Savings selects only when confidence is high',
+							},
+							{
+								name: 'Keep All Tools',
+								value: 'disabled',
+								description:
+									'Disable lazy schemas for workflows where every tool must always be visible',
+							},
+							{
+								name: 'Select Whenever Safe',
+								value: 'select_when_safe',
+								description:
+									'Allow Balanced, Savings, and Custom to select relevant schemas with safe fallback',
+							},
+						],
+						default: 'automatic',
+					},
+					{
+						displayName: 'Tool Schema Token Budget',
+						name: 'tokenBudget',
+						type: 'number',
+						typeOptions: { minValue: 128, maxValue: 1000000, numberPrecision: 0 },
+						default: 3000,
+						description:
+							'Target maximum estimated tokens for selected schemas; mandatory tools remain even if they exceed it',
+					},
+				],
+			},
+			{
 				displayName: 'Cache Strategy',
 				name: 'cacheStrategy',
 				type: 'options',
@@ -462,6 +553,11 @@ export class OptimizedChatModel implements INodeType {
 			{},
 		) as MaximumSavingsNodeOptions;
 		const cacheOptions = this.getNodeParameter('cacheOptions', itemIndex, {}) as CacheNodeOptions;
+		const toolSchemaOptions = this.getNodeParameter(
+			'toolSchemaOptions',
+			itemIndex,
+			{},
+		) as ToolSchemaNodeOptions;
 		const cacheStrategy = resolveNodeCacheStrategy(
 			this.getNode().parameters as Record<string, unknown>,
 		);
@@ -491,6 +587,17 @@ export class OptimizedChatModel implements INodeType {
 				optimizeMessages: behavior !== 'measureOnly',
 				...(behavior !== 'measureOnly'
 					? {
+							...(this.getNode().typeVersion >= 2
+								? {
+										toolSelection: {
+											mode: toolSchemaOptions.selectionMode ?? 'automatic',
+											minimumToolCount: toolSchemaOptions.minimumToolCount ?? 8,
+											maximumSelectedTools: toolSchemaOptions.maximumSelectedTools ?? 6,
+											tokenBudget: toolSchemaOptions.tokenBudget ?? 3000,
+											alwaysAvailableTools: namesList(toolSchemaOptions.alwaysAvailableTools),
+										},
+									}
+								: {}),
 							cacheAware: {
 								strategy: cacheStrategy,
 								...(cacheStrategy !== 'ignore_cache_signals'

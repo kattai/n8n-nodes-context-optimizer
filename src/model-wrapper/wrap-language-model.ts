@@ -8,6 +8,12 @@ import { extractProviderUsage } from '../analytics/provider-usage';
 import { decideCacheAction } from '../cache/policy-engine';
 import type { CacheBlockKind, CacheBlockVolatility, CacheStrategy } from '../cache/policy-types';
 import type { FingerprintRegistry } from '../cache/types';
+import { ToolRegistry } from '../tools/tool-registry';
+import {
+	selectToolSchemas,
+	type ToolSchemaSelectionOptions,
+	type ToolSchemaSelectionResult,
+} from '../tools/tool-schema-selector';
 import {
 	type MaximumSavingsFallbackReason,
 	type MaximumSavingsOptions,
@@ -63,6 +69,12 @@ export interface ModelOptimizationMetrics {
 	cacheRegistryScope: 'disabled' | 'process_local' | 'worker_local';
 	cacheWarning?: 'queue_mode_local_registry';
 	bypassReason?: ModelBypassReason;
+	toolSchemasBefore?: number;
+	toolSchemasAfter?: number;
+	toolSchemaTokensBefore?: number;
+	toolSchemaTokensAfter?: number;
+	toolSchemaSelectionReason?: ToolSchemaSelectionResult['reason'];
+	toolSchemaSelectionConfidence?: number;
 }
 
 export interface ModelInvocationObserver {
@@ -76,6 +88,11 @@ export interface LanguageModelWrapperOptions extends OptimizeContextOptions {
 	optimizeMessages?: boolean;
 	maximumSavings?: MaximumSavingsOptions;
 	cacheAware?: CacheAwareModelOptions;
+	toolSelection?: Omit<
+		ToolSchemaSelectionOptions,
+		'bindOptions' | 'profile' | 'recentlyUsedTools' | 'registry'
+	>;
+	toolSelectionEvidence?: ToolSchemaSelectionResult;
 }
 
 export interface CacheAwareModelOptions {
@@ -592,8 +609,12 @@ function optimizationMetrics(
 ): Omit<ModelOptimizationMetrics, 'operation'> {
 	const beforeText = before.map((message) => messageText(message as MessageLike)).join('\n');
 	const afterText = after.map((message) => messageText(message as MessageLike)).join('\n');
-	const tokensBeforeEstimated = estimateTokens(beforeText);
-	const tokensAfterEstimated = estimateTokens(afterText);
+	const toolSelection =
+		'toolSelectionEvidence' in options
+			? (options as LanguageModelWrapperOptions).toolSelectionEvidence
+			: undefined;
+	const tokensBeforeEstimated = estimateTokens(beforeText) + (toolSelection?.tokensBefore ?? 0);
+	const tokensAfterEstimated = estimateTokens(afterText) + (toolSelection?.tokensAfter ?? 0);
 	const savingsTokensEstimated = Math.max(0, tokensBeforeEstimated - tokensAfterEstimated);
 	const stablePrefixTokens = cacheMetrics.stablePrefixTokens;
 	const dynamicTokensBefore = cacheMetrics.dynamicTokensBefore + toolMetrics.eligibleTokensBefore;
@@ -659,6 +680,16 @@ function optimizationMetrics(
 				: ((options as LanguageModelWrapperOptions).cacheAware?.registryScope ?? 'process_local'),
 		...((options as LanguageModelWrapperOptions).cacheAware?.registryScope === 'worker_local'
 			? { cacheWarning: 'queue_mode_local_registry' as const }
+			: {}),
+		...(toolSelection
+			? {
+					toolSchemasBefore: toolSelection.totalTools,
+					toolSchemasAfter: toolSelection.tools.length,
+					toolSchemaTokensBefore: toolSelection.tokensBefore,
+					toolSchemaTokensAfter: toolSelection.tokensAfter,
+					toolSchemaSelectionReason: toolSelection.reason,
+					toolSchemaSelectionConfidence: toolSelection.confidence,
+				}
 			: {}),
 		...(bypassReason ? { bypassReason } : {}),
 	};
@@ -773,9 +804,70 @@ async function observedCall(
 	}
 }
 
+type ModelInvocationMethod = 'batch' | 'generate' | 'invoke' | 'stream';
+
+function deferredToolBinding(
+	model: LanguageModelLike,
+	bindArguments: unknown[],
+	options: LanguageModelWrapperOptions,
+	registry: ToolRegistry,
+): object {
+	const tools = Array.isArray(bindArguments[0]) ? bindArguments[0] : undefined;
+	const fallbackBound = model.bindTools?.(...bindArguments) ?? {};
+	if (!tools) return wrapLanguageModel(fallbackBound, options, registry);
+	const bindOptions = bindArguments.slice(1);
+	const methods = new Set<ModelInvocationMethod>(['batch', 'generate', 'invoke', 'stream']);
+
+	return new Proxy(fallbackBound, {
+		get(current, property, receiver) {
+			if (
+				typeof property === 'string' &&
+				methods.has(property as ModelInvocationMethod) &&
+				typeof (current as Record<string, unknown>)[property] === 'function'
+			) {
+				return async (input: unknown, ...callArguments: unknown[]) => {
+					const configured = options.toolSelection;
+					const selection = selectToolSchemas(tools, input, {
+						profile: options.profile ?? 'balanced',
+						mode:
+							options.cacheAware?.strategy === 'cache_priority'
+								? 'disabled'
+								: (configured?.mode ?? 'disabled'),
+						minimumToolCount: configured?.minimumToolCount ?? 8,
+						maximumSelectedTools: configured?.maximumSelectedTools ?? 6,
+						tokenBudget: configured?.tokenBudget ?? 3000,
+						alwaysAvailableTools: configured?.alwaysAvailableTools ?? [],
+						bindOptions,
+						registry,
+					});
+					const selectedBound = selection.keptAll
+						? current
+						: (model.bindTools?.(selection.tools, ...bindOptions) ?? current);
+					const wrapped = wrapLanguageModel(
+						selectedBound,
+						{ ...options, toolSelectionEvidence: selection },
+						registry,
+					) as Record<string, unknown>;
+					const invocation = wrapped[property];
+					if (typeof invocation !== 'function') {
+						throw new Error(`Bound model does not implement ${property}`);
+					}
+					return await (invocation as (value: unknown, ...args: unknown[]) => Promise<unknown>)(
+						input,
+						...callArguments,
+					);
+				};
+			}
+			const value = Reflect.get(current, property, receiver);
+			return typeof value === 'function' ? value.bind(current) : value;
+		},
+	});
+}
+
 export function wrapLanguageModel<T extends object>(
 	model: T,
 	options: LanguageModelWrapperOptions,
+	registry = new ToolRegistry(),
 ): T & LanguageModelLike {
 	const target = model as T & LanguageModelLike;
 	const observer = options.observer;
@@ -917,8 +1009,12 @@ export function wrapLanguageModel<T extends object>(
 				};
 			}
 			if (property === 'bindTools' && typeof current.bindTools === 'function') {
-				return (...args: unknown[]) =>
-					wrapLanguageModel(current.bindTools?.(...args) ?? {}, options);
+				return (...args: unknown[]) => {
+					if (options.optimizeMessages !== false && options.toolSelection) {
+						return deferredToolBinding(current, args, options, registry);
+					}
+					return wrapLanguageModel(current.bindTools?.(...args) ?? {}, options, registry);
+				};
 			}
 			const value = Reflect.get(current, property, receiver);
 			return typeof value === 'function' ? value.bind(current) : value;

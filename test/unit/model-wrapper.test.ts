@@ -24,6 +24,31 @@ class FakeModel {
 	}
 }
 
+interface ToolBindingState {
+	bindings: unknown[][];
+	invocations: Array<{ toolNames: string[]; input: unknown }>;
+}
+
+class ToolBindingModel {
+	constructor(
+		private readonly state: ToolBindingState,
+		private readonly boundTools: unknown[] = [],
+	) {}
+
+	bindTools(tools: unknown[]) {
+		this.state.bindings.push(tools);
+		return new ToolBindingModel(this.state, tools);
+	}
+
+	async invoke(input: unknown) {
+		this.state.invocations.push({
+			toolNames: this.boundTools.map((tool) => String((tool as { name?: string }).name)),
+			input,
+		});
+		return { content: 'ok' };
+	}
+}
+
 describe('wrapLanguageModel', () => {
 	it('measures a baseline without changing or deduplicating messages', async () => {
 		const model = new FakeModel();
@@ -129,6 +154,98 @@ describe('wrapLanguageModel', () => {
 
 		expect(bound).not.toBeNull();
 		expect(typeof bound.invoke).toBe('function');
+	});
+
+	it('defers Savings tool binding until the current task is known', async () => {
+		const state: ToolBindingState = { bindings: [], invocations: [] };
+		const metrics: unknown[] = [];
+		const tools = [
+			{ name: 'calendar_lookup', description: 'Find meeting dates and available time slots' },
+			{ name: 'inventory_search', description: 'Search inventory and stock' },
+			{ name: 'weather_forecast', description: 'Get weather forecast' },
+			{ name: 'invoice_lookup', description: 'Find invoices and payment status' },
+		];
+		const wrapped = wrapLanguageModel(new ToolBindingModel(state), {
+			profile: 'savings',
+			toolSelection: {
+				mode: 'automatic',
+				minimumToolCount: 4,
+				maximumSelectedTools: 2,
+				tokenBudget: 500,
+			},
+			observer: { onStart: (value) => metrics.push(value) },
+		});
+		const bound = wrapped.bindTools?.(tools) as { invoke(input: unknown): Promise<unknown> };
+
+		await bound.invoke([{ role: 'user', content: 'Find calendar meeting slots tomorrow.' }]);
+
+		expect(state.invocations).toHaveLength(1);
+		expect(state.invocations[0].toolNames).toContain('calendar_lookup');
+		expect(state.invocations[0].toolNames.length).toBeLessThan(tools.length);
+		expect(metrics[0]).toMatchObject({
+			toolSchemasBefore: 4,
+			toolSchemasAfter: expect.any(Number),
+			toolSchemaSelectionReason: 'selected',
+		});
+	});
+
+	it('keeps every bound tool for ambiguous structured output', async () => {
+		const state: ToolBindingState = { bindings: [], invocations: [] };
+		const tools = [
+			{ name: 'calendar_lookup', description: 'Find meeting dates and available time slots' },
+			{ name: 'inventory_search', description: 'Search inventory and stock' },
+			{ name: 'weather_forecast', description: 'Get weather forecast' },
+			{ name: 'invoice_lookup', description: 'Find invoices and payment status' },
+		];
+		const wrapped = wrapLanguageModel(new ToolBindingModel(state), {
+			profile: 'savings',
+			toolSelection: {
+				mode: 'automatic',
+				minimumToolCount: 4,
+				maximumSelectedTools: 2,
+				tokenBudget: 500,
+			},
+		});
+		const bound = wrapped.bindTools?.(tools, { tool_choice: 'required' }) as {
+			invoke(input: unknown): Promise<unknown>;
+		};
+
+		await bound.invoke([{ role: 'user', content: 'Find calendar meeting slots tomorrow.' }]);
+
+		expect(state.invocations[0].toolNames).toEqual(tools.map((tool) => tool.name));
+	});
+
+	it('keeps every schema when Cache Priority is explicit', async () => {
+		const state: ToolBindingState = { bindings: [], invocations: [] };
+		const metrics: unknown[] = [];
+		const tools = [
+			{ name: 'calendar_lookup', description: 'Find meeting dates and available time slots' },
+			{ name: 'inventory_search', description: 'Search inventory and stock' },
+			{ name: 'weather_forecast', description: 'Get weather forecast' },
+			{ name: 'invoice_lookup', description: 'Find invoices and payment status' },
+		];
+		const wrapped = wrapLanguageModel(new ToolBindingModel(state), {
+			profile: 'savings',
+			toolSelection: {
+				mode: 'automatic',
+				minimumToolCount: 4,
+				maximumSelectedTools: 2,
+				tokenBudget: 500,
+			},
+			cacheAware: {
+				strategy: 'cache_priority',
+				scope: 'test',
+				minimumRepetitions: 2,
+				minimumStablePrefixTokens: 100,
+			},
+			observer: { onStart: (value) => metrics.push(value) },
+		});
+		const bound = wrapped.bindTools?.(tools) as { invoke(input: unknown): Promise<unknown> };
+
+		await bound.invoke([{ role: 'user', content: 'Find calendar meeting slots tomorrow.' }]);
+
+		expect(state.invocations[0].toolNames).toEqual(tools.map((tool) => tool.name));
+		expect(metrics[0]).toMatchObject({ toolSchemaSelectionReason: 'disabled' });
 	});
 
 	it('never removes the latest message when it resembles an older message', async () => {

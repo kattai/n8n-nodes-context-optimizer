@@ -41,6 +41,7 @@ These are measured ranges for content that is safe and eligible to optimize, not
 - JSON packing is reversible and round-trip verified before use.
 - Large omitted data remains addressable by resource ID and exact path.
 - Unsafe or non-saving transformations fall back to the original.
+- Savings can lazily bind relevant tool schemas; low confidence and structured output keep all tools.
 
 Semantic compression is experimental and disabled by default. Code is preserved byte for byte.
 
