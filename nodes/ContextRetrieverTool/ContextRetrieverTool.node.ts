@@ -118,7 +118,7 @@ const toolInputSchema = z.object({
 		.string()
 		.min(1)
 		.optional()
-		.describe('Resource ID returned by Token Saver Store or Content'),
+		.describe('Resource ID returned by Context Saver Store or Content'),
 	query: z.string().min(1).optional().describe('Terms to locate with search_context'),
 	path,
 	filters: z.record(primitive).optional().describe('Equality filters used by filter_records'),
@@ -179,17 +179,18 @@ function nextExecutionState(executionId: string, nodeName: string): ExecutionRet
 
 export class ContextRetrieverTool implements INodeType {
 	description: INodeTypeDescription = {
-		displayName: 'Token Saver Retriever',
+		displayName: 'Context Saver Retriever',
 		name: 'contextRetrieverTool',
 		icon: {
 			light: 'file:context-retriever-tool.svg',
 			dark: 'file:context-retriever-tool.dark.svg',
 		},
 		group: ['transform'],
-		version: 1,
+		version: [1, 2],
+		defaultVersion: 2,
 		description:
 			'Let an AI Agent recover exact details from content virtualized outside its prompt',
-		defaults: { name: 'Retrieve Exact Context' },
+		defaults: { name: 'Context Saver Retriever' },
 		subtitle: '={{$parameter["scope"]}}',
 		inputs: [],
 		outputs: [NodeConnectionTypes.AiTool],
@@ -202,7 +203,7 @@ export class ContextRetrieverTool implements INodeType {
 				typeOptions: { rows: 4 },
 				required: true,
 				default:
-					'Retrieve an exact missing value or record from a Token Saver resource. Use only when the compact context does not contain the required ID, date, amount, field, or record. Never guess missing data.',
+					'Retrieve an exact missing value or record from a Context Saver resource. Use only when the compact context does not contain the required ID, date, amount, field, or record. Never guess missing data.',
 				description:
 					'Short instruction shown to the agent; keep retrieval rules here instead of the system prompt',
 			},
@@ -213,7 +214,7 @@ export class ContextRetrieverTool implements INodeType {
 				required: true,
 				default: '={{ $workflow.id }}',
 				description:
-					'Isolation key; must exactly match Token Saver Store or Content Virtualization',
+					'Isolation key; must exactly match Context Saver Store or Content Virtualization',
 			},
 			{
 				displayName: 'Storage Directory',

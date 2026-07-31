@@ -170,6 +170,36 @@ describe('token analytics', () => {
 		});
 	});
 
+	it('separates eligible, full-request, provider, and net savings with a recommendation', () => {
+		const result = analyzeTokens({
+			optimization: {
+				tokensBeforeEstimated: 10_000,
+				tokensAfterEstimated: 5_000,
+				eligibleTokensBefore: 9_000,
+				eligibleTokensAfter: 1_800,
+			},
+			providerUsage: {
+				inputTokens: 4_800,
+				cachedInputTokens: 1_000,
+				outputTokens: 100,
+				totalTokens: 4_900,
+				available: true,
+			},
+		});
+
+		expect(result.scopes).toEqual({
+			eligible: { available: true, before: 9_000, after: 1_800, saved: 7_200, percent: 80 },
+			fullRequest: { before: 10_000, after: 4_800, saved: 5_200, percent: 52 },
+			provider: { available: true, input: 4_800, cachedInput: 1_000, output: 100 },
+			net: { saved: 5_200, percent: 52, overhead: 0, positive: true },
+		});
+		expect(result.recommendation).toMatchObject({ action: 'keep', reason: 'positive_net_savings' });
+		expect(analysisOutput(result)).toMatchObject({
+			savingsBreakdown: { eligible: { percent: 80 }, fullRequest: { percent: 52 } },
+			recommendation: { action: 'keep' },
+		});
+	});
+
 	it('does not report money until at least one explicit price is configured', () => {
 		const result = analyzeTokens(
 			{ original: 1_000, sent: 500 },

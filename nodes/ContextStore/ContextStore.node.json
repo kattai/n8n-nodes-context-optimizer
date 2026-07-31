@@ -1,8 +1,8 @@
 {
 	"node": "n8n-nodes-context-optimizer.contextStore",
-	"nodeVersion": "1.0",
+	"nodeVersion": "2.0",
 	"codexVersion": "1.0",
-	"details": "Keeps large original context outside the AI prompt with gzip, SHA-256 verification, scope isolation, and TTL.",
+	"details": "Context Saver Store keeps exact original content outside the prompt with hash reuse, TTL, scope isolation, gzip, secret protection, and receipts.",
 	"categories": ["Data & Transformation"],
 	"resources": {
 		"primaryDocumentation": [

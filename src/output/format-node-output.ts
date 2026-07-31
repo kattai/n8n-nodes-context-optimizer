@@ -163,6 +163,8 @@ export function analysisOutput(analysis: TokenAnalysis): Record<string, unknown>
 				: 'not_reported',
 		},
 		measurementConfidence: analysis.measurementConfidence,
+		savingsBreakdown: analysis.scopes,
+		recommendation: analysis.recommendation,
 		...(analysis.measurement.cacheStrategy
 			? {
 					cacheOptimization: {

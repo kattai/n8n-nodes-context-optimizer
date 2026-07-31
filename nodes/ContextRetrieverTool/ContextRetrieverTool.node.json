@@ -1,8 +1,8 @@
 {
 	"node": "n8n-nodes-context-optimizer.contextRetrieverTool",
-	"nodeVersion": "1.0",
+	"nodeVersion": "2.0",
 	"codexVersion": "1.0",
-	"details": "AI Agent tool that recovers exact missing values or records from Token Saver resources without returning the full original.",
+	"details": "Context Saver Retriever gives AI Agents compact, evidence-based, paged access to exact values and records stored outside their prompt.",
 	"categories": ["AI"],
 	"resources": {
 		"primaryDocumentation": [

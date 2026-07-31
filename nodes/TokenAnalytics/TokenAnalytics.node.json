@@ -1,8 +1,8 @@
 {
 	"node": "n8n-nodes-context-optimizer.tokenAnalytics",
-	"nodeVersion": "1.0",
+	"nodeVersion": "2.0",
 	"codexVersion": "1.0",
-	"details": "Returns a concise token-savings summary and optional detailed provider usage, overhead, cost, latency, and quality diagnostics.",
+	"details": "Context Saver Metrics separates eligible reduction, full-request savings, provider-reported usage, net savings, overhead, and recommendations.",
 	"categories": ["Data & Transformation"],
 	"resources": {
 		"primaryDocumentation": [

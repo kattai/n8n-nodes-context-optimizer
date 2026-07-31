@@ -13,13 +13,30 @@ function property(node: { description: { properties: Array<{ name: string }> } }
 	return node.description.properties.find((entry) => entry.name === name);
 }
 
+function properties(node: { description: { properties: Array<{ name: string }> } }, name: string) {
+	return node.description.properties.filter((entry) => entry.name === name);
+}
+
 describe('Token Saver node descriptions', () => {
 	it('uses one cohesive product name across all five nodes', () => {
-		expect(new OptimizedChatModel().description.displayName).toBe('Token Saver Chat Model');
-		expect(new ContextOptimizer().description.displayName).toBe('Token Saver Content');
-		expect(new ContextStore().description.displayName).toBe('Token Saver Store');
-		expect(new ContextRetrieverTool().description.displayName).toBe('Token Saver Retriever');
-		expect(new TokenAnalytics().description.displayName).toBe('Token Savings');
+		expect(new OptimizedChatModel().description.displayName).toBe('Context Saver Model');
+		expect(new ContextOptimizer().description.displayName).toBe('Context Saver Content');
+		expect(new ContextStore().description.displayName).toBe('Context Saver Store');
+		expect(new ContextRetrieverTool().description.displayName).toBe('Context Saver Retriever');
+		expect(new TokenAnalytics().description.displayName).toBe('Context Saver Metrics');
+	});
+
+	it('defaults every node to light version 2 while keeping version 1 loadable', () => {
+		for (const node of [
+			new OptimizedChatModel(),
+			new ContextOptimizer(),
+			new ContextStore(),
+			new ContextRetrieverTool(),
+			new TokenAnalytics(),
+		]) {
+			expect(node.description.version).toEqual([1, 2]);
+			expect(node.description.defaultVersion).toBe(2);
+		}
 	});
 
 	it('defaults user-facing transform outputs to a simple shape', () => {
@@ -38,23 +55,53 @@ describe('Token Saver node descriptions', () => {
 
 	it('exposes meaningful quality levels and no telemetry-only savings target', () => {
 		const chatModel = new OptimizedChatModel();
-		const profile = property(chatModel, 'profile') as {
+		const [legacyProfile, profile] = properties(chatModel, 'profile') as Array<{
 			options: Array<{ name: string; value: string; description: string }>;
-		};
+			displayOptions: { show: Record<string, unknown> };
+		}>;
 		expect(profile.options.map((entry) => entry.name)).toEqual([
-			'Maximum Quality',
+			'Quality',
 			'Balanced (Recommended)',
-			'Maximum Savings',
+			'Savings',
 			'Custom (Advanced)',
 		]);
 		expect(profile.options.every((entry) => entry.description.length > 30)).toBe(true);
-		expect(profile.options.find((entry) => entry.value === 'aggressive')?.description).toContain(
-			'Token Saver Retriever',
+		expect(legacyProfile.options.map((entry) => entry.value)).toEqual([
+			'safe',
+			'balanced',
+			'aggressive',
+			'custom',
+		]);
+		expect(profile.options.find((entry) => entry.value === 'savings')?.description).toContain(
+			'Context Saver Retriever',
 		);
+		expect(legacyProfile.displayOptions.show).toMatchObject({ '@version': [1] });
+		expect(profile.displayOptions.show).toMatchObject({ '@version': [2] });
 		expect(property(chatModel, 'maximumSavingsOptions')).toMatchObject({
-			displayOptions: { show: { behavior: ['optimizeAndMeasure'], profile: ['aggressive'] } },
+			displayOptions: {
+				show: { behavior: ['optimizeAndMeasure'], profile: ['aggressive', 'savings'] },
+			},
 		});
 		expect(property(new ContextOptimizer(), 'targetSavingsPercent')).toBeUndefined();
+	});
+
+	it('shows the v2 profile for every Content operation and explicit virtualization modes', () => {
+		const content = new ContextOptimizer();
+		const profile = properties(content, 'profile')[1] as {
+			displayOptions: { show: Record<string, unknown> };
+			options: Array<{ value: string }>;
+		};
+		expect(profile.displayOptions.show).toEqual({ '@version': [2] });
+		expect(profile.options.map((entry) => entry.value)).toEqual([
+			'quality',
+			'balanced',
+			'savings',
+			'custom',
+		]);
+		expect(property(content, 'virtualizationMode')).toMatchObject({
+			default: 'automatic',
+			options: [{ value: 'automatic' }, { value: 'disabled' }, { value: 'required' }],
+		});
 	});
 
 	it('offers cache-aware strategies with progressive disclosure', () => {

@@ -2,6 +2,7 @@ import { resolve } from 'node:path';
 import type { INodeType, INodeTypeDescription, ISupplyDataFunctions } from 'n8n-workflow';
 import { NodeConnectionTypes, NodeOperationError } from 'n8n-workflow';
 import type { CustomProfileConfig, OptimizerProfileName } from '../../src/core/types';
+import { isSavingsProfile } from '../../src/core/profiles';
 import { recordModelTelemetry } from '../../src/analytics/model-telemetry-registry';
 import { extractProviderUsage } from '../../src/analytics/provider-usage';
 import {
@@ -56,9 +57,8 @@ function hasCompatibleRetriever(
 	const workflowId = execution.getWorkflow().id ?? 'workflow';
 	// n8n's public getChildNodes() currently follows only Main connections.
 	// SupplyDataContext exposes the exact Agent parent for AI sub-nodes.
-	const parentNode = (
-		execution as unknown as { parentNode?: { name?: string; type?: string } }
-	).parentNode;
+	const parentNode = (execution as unknown as { parentNode?: { name?: string; type?: string } })
+		.parentNode;
 	const agentNames =
 		parentNode?.name && parentNode.type?.includes('n8n-nodes-langchain.agent')
 			? [parentNode.name]
@@ -86,7 +86,7 @@ function hasCompatibleRetriever(
 
 export class OptimizedChatModel implements INodeType {
 	description: INodeTypeDescription = {
-		displayName: 'Token Saver Chat Model',
+		displayName: 'Context Saver Model',
 		name: 'optimizedChatModel',
 		icon: {
 			light: 'file:optimized-chat-model.svg',
@@ -96,11 +96,12 @@ export class OptimizedChatModel implements INodeType {
 		// @ts-expect-error n8n's public type currently omits the supported false value.
 		usableAsTool: false,
 		group: ['transform'],
-		version: [1],
+		version: [1, 2],
+		defaultVersion: 2,
 		subtitle: '={{$parameter["behavior"]}}',
 		description: 'Save input tokens before any connected chat model without changing its response',
 		defaults: {
-			name: 'Token Saver Chat Model',
+			name: 'Context Saver Model',
 		},
 		inputs: [
 			{
@@ -128,8 +129,7 @@ export class OptimizedChatModel implements INodeType {
 					{
 						name: 'Measure Baseline',
 						value: 'measureOnly',
-						description:
-							'Use only in A/B tests; records usage but sends every message unchanged',
+						description: 'Use only in A/B tests; records usage but sends every message unchanged',
 						action: 'Measure an unoptimized baseline',
 					},
 				],
@@ -151,13 +151,15 @@ export class OptimizedChatModel implements INodeType {
 					{
 						name: 'Balanced (Recommended)',
 						value: 'balanced',
-						description: 'Preserve the latest 6 messages and safely compress older repetition and tool results',
+						description:
+							'Preserve the latest 6 messages and safely compress older repetition and tool results',
 						action: 'Balance quality and savings',
 					},
 					{
 						name: 'Maximum Savings',
 						value: 'aggressive',
-						description: 'Store large tool results outside the prompt and keep a relevant preview; requires Token Saver Retriever for exact data',
+						description:
+							'Store large tool results outside the prompt and keep a relevant preview; requires Context Saver Retriever for exact data',
 						action: 'Maximize token savings',
 					},
 					{
@@ -168,8 +170,53 @@ export class OptimizedChatModel implements INodeType {
 					},
 				],
 				default: 'balanced',
-				description: 'Higher savings levels protect fewer recent messages but never remove unique messages',
-				displayOptions: { show: { behavior: ['optimizeAndMeasure'] } },
+				description:
+					'Higher savings levels protect fewer recent messages but never remove unique messages',
+				displayOptions: {
+					show: { '@version': [1], behavior: ['optimizeAndMeasure'] },
+				},
+			},
+			{
+				displayName: 'Profile',
+				name: 'profile',
+				type: 'options',
+				noDataExpression: true,
+				options: [
+					{
+						name: 'Quality',
+						value: 'quality',
+						description:
+							'Typical eligible saving: 15–35%. Lossless transforms, 12 recent messages, and exact deduplication only.',
+						action: 'Prioritize maximum context fidelity',
+					},
+					{
+						name: 'Balanced (Recommended)',
+						value: 'balanced',
+						description:
+							'Typical eligible saving: 35–60%. Keeps 6 recent messages and uses conservative task-aware selection.',
+						action: 'Balance fidelity and savings',
+					},
+					{
+						name: 'Savings',
+						value: 'savings',
+						description:
+							'Typical eligible saving: 60–85%. Virtualizes large results; connect Context Saver Retriever for exact details.',
+						action: 'Maximize recoverable savings',
+					},
+					{
+						name: 'Custom (Advanced)',
+						value: 'custom',
+						description:
+							'Set recent-message retention and near-duplicate behavior manually for a specialized workflow',
+						action: 'Use a custom optimization policy',
+					},
+				],
+				default: 'balanced',
+				description:
+					'Ranges are typical savings on eligible context, not guarantees for the full request',
+				displayOptions: {
+					show: { '@version': [2], behavior: ['optimizeAndMeasure'] },
+				},
 			},
 			{
 				displayName: 'Maximum Savings Options',
@@ -180,7 +227,7 @@ export class OptimizedChatModel implements INodeType {
 				displayOptions: {
 					show: {
 						behavior: ['optimizeAndMeasure'],
-						profile: ['aggressive'],
+						profile: ['aggressive', 'savings'],
 					},
 				},
 				description: 'Defaults target about 80% savings on eligible large tool results',
@@ -190,7 +237,8 @@ export class OptimizedChatModel implements INodeType {
 						name: 'allowSecretLikeContent',
 						type: 'boolean',
 						default: false,
-						description: 'Whether to store content that resembles API keys, tokens, passwords, or private keys; leave disabled unless storage is secured',
+						description:
+							'Whether to store content that resembles API keys, tokens, passwords, or private keys; leave disabled unless storage is secured',
 					},
 					{
 						displayName: 'Maximum Preview (%)',
@@ -206,7 +254,8 @@ export class OptimizedChatModel implements INodeType {
 						type: 'number',
 						typeOptions: { minValue: 1, maxValue: 1024, numberPrecision: 0 },
 						default: 10,
-						description: 'Reject larger uncompressed originals and fall back to structural compression',
+						description:
+							'Reject larger uncompressed originals and fall back to structural compression',
 					},
 					{
 						displayName: 'Minimum Content Tokens',
@@ -214,14 +263,16 @@ export class OptimizedChatModel implements INodeType {
 						type: 'number',
 						typeOptions: { minValue: 100, maxValue: 1000000, numberPrecision: 0 },
 						default: 2000,
-						description: 'Smaller tool results stay inline because storage and retrieval would cost more than they save',
+						description:
+							'Smaller tool results stay inline because storage and retrieval would cost more than they save',
 					},
 					{
 						displayName: 'Scope',
 						name: 'scope',
 						type: 'string',
 						default: '={{ $workflow.id }}',
-						description: 'Isolation key; must exactly match the Token Saver Retriever connected to the same agent',
+						description:
+							'Isolation key; must exactly match the Context Saver Retriever connected to the same agent',
 					},
 					{
 						displayName: 'Storage Directory',
@@ -229,7 +280,8 @@ export class OptimizedChatModel implements INodeType {
 						type: 'string',
 						default: '',
 						placeholder: defaultStorageDirectory(),
-						description: 'Self-hosted path shared with Token Saver Retriever; queue workers need the same shared directory',
+						description:
+							'Self-hosted path shared with Context Saver Retriever; queue workers need the same shared directory',
 					},
 					{
 						displayName: 'Target Preview (%)',
@@ -237,7 +289,8 @@ export class OptimizedChatModel implements INodeType {
 						type: 'number',
 						typeOptions: { minValue: 10, maxValue: 30, numberPrecision: 0 },
 						default: 20,
-						description: 'Approximate share retained in the prompt; 20% targets about 80% eligible-token savings',
+						description:
+							'Approximate share retained in the prompt; 20% targets about 80% eligible-token savings',
 					},
 					{
 						displayName: 'TTL (Hours)',
@@ -298,11 +351,7 @@ export class OptimizedChatModel implements INodeType {
 				displayOptions: {
 					show: {
 						behavior: ['optimizeAndMeasure'],
-						cacheStrategy: [
-							'automatic_hybrid',
-							'cache_priority',
-							'token_reduction_priority',
-						],
+						cacheStrategy: ['automatic_hybrid', 'cache_priority', 'token_reduction_priority'],
 					},
 				},
 			},
@@ -313,8 +362,7 @@ export class OptimizedChatModel implements INodeType {
 				placeholder: 'Add Setting',
 				default: {},
 				displayOptions: { show: { behavior: ['optimizeAndMeasure'] } },
-				description:
-					'Advanced repetition thresholds for provider-neutral implicit cache detection',
+				description: 'Advanced repetition thresholds for provider-neutral implicit cache detection',
 				options: [
 					{
 						displayName: 'Fingerprint Directory',
@@ -339,7 +387,8 @@ export class OptimizedChatModel implements INodeType {
 						type: 'number',
 						typeOptions: { minValue: 100, maxValue: 1000000, numberPrecision: 0 },
 						default: 5000,
-						description: 'Maximum local metadata records before least-recently-seen entries are removed',
+						description:
+							'Maximum local metadata records before least-recently-seen entries are removed',
 					},
 					{
 						displayName: 'Minimum Repetitions',
@@ -355,7 +404,8 @@ export class OptimizedChatModel implements INodeType {
 						type: 'number',
 						typeOptions: { minValue: 128, maxValue: 1000000, numberPrecision: 0 },
 						default: 2048,
-						description: 'Ignore cache policy overhead for prefixes too small to provide meaningful savings',
+						description:
+							'Ignore cache policy overhead for prefixes too small to provide meaningful savings',
 					},
 				],
 			},
@@ -385,63 +435,42 @@ export class OptimizedChatModel implements INodeType {
 						name: 'approximateDeduplication',
 						type: 'boolean',
 						default: false,
-						description: 'Whether to merge near-duplicates when their negation and instruction polarity match',
+						description:
+							'Whether to merge near-duplicates when their negation and instruction polarity match',
 					},
 				],
 			},
 		],
 	};
 
-	async supplyData(
-		this: ISupplyDataFunctions,
-		itemIndex: number,
-	): Promise<{ response: object }> {
-		const model = await this.getInputConnectionData(
-			NodeConnectionTypes.AiLanguageModel,
-			itemIndex,
-		);
+	async supplyData(this: ISupplyDataFunctions, itemIndex: number): Promise<{ response: object }> {
+		const model = await this.getInputConnectionData(NodeConnectionTypes.AiLanguageModel, itemIndex);
 		if (!model || Array.isArray(model)) {
 			throw new NodeOperationError(this.getNode(), 'Connect exactly one chat model', {
 				itemIndex,
 			});
 		}
 
-		const profile = this.getNodeParameter(
-			'profile',
-			itemIndex,
-			'balanced',
-		) as OptimizerProfileName;
-		const behavior = this.getNodeParameter(
-			'behavior',
-			itemIndex,
-			'optimizeAndMeasure',
-		) as 'optimizeAndMeasure' | 'measureOnly';
-		const custom = this.getNodeParameter(
-			'customProfile',
-			itemIndex,
-			{},
-		) as CustomProfileConfig;
+		const profile = this.getNodeParameter('profile', itemIndex, 'balanced') as OptimizerProfileName;
+		const behavior = this.getNodeParameter('behavior', itemIndex, 'optimizeAndMeasure') as
+			| 'optimizeAndMeasure'
+			| 'measureOnly';
+		const custom = this.getNodeParameter('customProfile', itemIndex, {}) as CustomProfileConfig;
 		const maximumSavingsOptions = this.getNodeParameter(
 			'maximumSavingsOptions',
 			itemIndex,
 			{},
 		) as MaximumSavingsNodeOptions;
-		const cacheOptions = this.getNodeParameter(
-			'cacheOptions',
-			itemIndex,
-			{},
-		) as CacheNodeOptions;
+		const cacheOptions = this.getNodeParameter('cacheOptions', itemIndex, {}) as CacheNodeOptions;
 		const cacheStrategy = resolveNodeCacheStrategy(
 			this.getNode().parameters as Record<string, unknown>,
 		);
 		const workflowId = this.getWorkflow().id ?? 'workflow';
-		const scope =
-			connectedScope(maximumSavingsOptions.scope, workflowId) ?? workflowId;
+		const scope = connectedScope(maximumSavingsOptions.scope, workflowId) ?? workflowId;
 		const storageDirectory =
 			maximumSavingsOptions.storageDirectory?.trim() || defaultStorageDirectory();
 		const retrieverAvailable =
-			profile === 'aggressive' &&
-			hasCompatibleRetriever(this, scope, storageDirectory);
+			isSavingsProfile(profile) && hasCompatibleRetriever(this, scope, storageDirectory);
 		const maximumPreviewPercent = Math.min(
 			30,
 			Math.max(10, maximumSavingsOptions.maxPreviewPercent ?? 30),
@@ -452,8 +481,7 @@ export class OptimizedChatModel implements INodeType {
 		);
 		const fingerprintDirectory =
 			cacheOptions.fingerprintDirectory?.trim() || defaultFingerprintDirectory();
-		const modelName =
-			(model as { constructor?: { name?: string } }).constructor?.name ?? 'model';
+		const modelName = (model as { constructor?: { name?: string } }).constructor?.name ?? 'model';
 		const cacheScope = `${workflowId}:${this.getNode().name}:${modelName}`;
 
 		return {
@@ -467,27 +495,21 @@ export class OptimizedChatModel implements INodeType {
 								strategy: cacheStrategy,
 								...(cacheStrategy !== 'ignore_cache_signals'
 									? {
-											registry: new FileSystemFingerprintRegistry(
-												fingerprintDirectory,
-												{
-													ttlHours: cacheOptions.fingerprintTtlHours ?? 24,
-													maxEntries: cacheOptions.maximumFingerprints ?? 5000,
-												},
-											),
+											registry: new FileSystemFingerprintRegistry(fingerprintDirectory, {
+												ttlHours: cacheOptions.fingerprintTtlHours ?? 24,
+												maxEntries: cacheOptions.maximumFingerprints ?? 5000,
+											}),
 										}
 									: {}),
 								scope: cacheScope,
 								minimumRepetitions: cacheOptions.minimumRepetitions ?? 2,
-								minimumStablePrefixTokens:
-									cacheOptions.minimumStablePrefixTokens ?? 2048,
+								minimumStablePrefixTokens: cacheOptions.minimumStablePrefixTokens ?? 2048,
 								registryScope:
-									process.env.EXECUTIONS_MODE === 'queue'
-										? 'worker_local'
-										: 'process_local',
+									process.env.EXECUTIONS_MODE === 'queue' ? 'worker_local' : 'process_local',
 							},
 						}
 					: {}),
-				...(profile === 'aggressive' && behavior !== 'measureOnly'
+				...(isSavingsProfile(profile) && behavior !== 'measureOnly'
 					? {
 							maximumSavings: {
 								retrieverAvailable,
@@ -500,8 +522,7 @@ export class OptimizedChatModel implements INodeType {
 								thresholdTokens: maximumSavingsOptions.minimumContentTokens ?? 2000,
 								targetPreviewRatio: targetPreviewPercent / 100,
 								maxPreviewRatio: maximumPreviewPercent / 100,
-								allowSecretLikeContent:
-									maximumSavingsOptions.allowSecretLikeContent ?? false,
+								allowSecretLikeContent: maximumSavingsOptions.allowSecretLikeContent ?? false,
 							},
 						}
 					: {}),
@@ -511,8 +532,7 @@ export class OptimizedChatModel implements INodeType {
 							[{ json: { optimization: { ...metrics } } }],
 						]).index,
 					onSuccess: (traceId, response, metrics) => {
-						const runIndex =
-							typeof traceId === 'number' ? traceId : this.getNextRunIndex();
+						const runIndex = typeof traceId === 'number' ? traceId : this.getNextRunIndex();
 						const usage = extractProviderUsage(response);
 						this.addOutputData(NodeConnectionTypes.AiLanguageModel, runIndex, [
 							[
@@ -533,8 +553,7 @@ export class OptimizedChatModel implements INodeType {
 						});
 					},
 					onError: (traceId, error) => {
-						const runIndex =
-							typeof traceId === 'number' ? traceId : this.getNextRunIndex();
+						const runIndex = typeof traceId === 'number' ? traceId : this.getNextRunIndex();
 						this.addOutputData(
 							NodeConnectionTypes.AiLanguageModel,
 							runIndex,

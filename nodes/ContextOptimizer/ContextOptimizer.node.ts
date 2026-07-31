@@ -7,10 +7,7 @@ import type {
 } from 'n8n-workflow';
 import { NodeConnectionTypes, NodeOperationError } from 'n8n-workflow';
 import { optimizeContent } from '../../src/content/optimize-content';
-import type {
-	ContentOptimizationOptions,
-	ContentType,
-} from '../../src/content/types';
+import type { ContentOptimizationOptions, ContentType } from '../../src/content/types';
 import { optimizeContext } from '../../src/core/optimizer';
 import { estimateTokens } from '../../src/core/token-estimator';
 import type {
@@ -34,12 +31,10 @@ interface InvokableModel {
 	invoke(input: unknown, config?: { signal?: AbortSignal }): Promise<unknown>;
 }
 
-type ContextOptimizerOperation =
-	| 'buildAgentContext'
-	| 'compileStaticPrompt'
-	| 'optimizeContent';
+type ContextOptimizerOperation = 'buildAgentContext' | 'compileStaticPrompt' | 'optimizeContent';
 
 interface VirtualizationNodeOptions {
+	allowSecretLikeContent?: boolean;
 	thresholdTokens?: number;
 	maxPreviewTokens?: number;
 	maxItems?: number;
@@ -114,7 +109,7 @@ async function withTimeout<T>(
 
 export class ContextOptimizer implements INodeType {
 	description: INodeTypeDescription = {
-		displayName: 'Token Saver Content',
+		displayName: 'Context Saver Content',
 		name: 'contextOptimizer',
 		icon: {
 			light: 'file:context-optimizer.svg',
@@ -124,11 +119,13 @@ export class ContextOptimizer implements INodeType {
 		// @ts-expect-error n8n's public type currently omits the supported false value.
 		usableAsTool: false,
 		group: ['transform'],
-		version: [1],
+		version: [1, 2],
+		defaultVersion: 2,
 		subtitle: '={{$parameter["operation"]}}',
-		description: 'Compress large data before adding it to an AI prompt; use for JSON, RAG, logs, HTML, or static prompts',
+		description:
+			'Compress large data before adding it to an AI prompt; use for JSON, RAG, logs, HTML, or static prompts',
 		defaults: {
-			name: 'Token Saver Content',
+			name: 'Context Saver Content',
 		},
 		inputs: [
 			NodeConnectionTypes.Main,
@@ -150,19 +147,22 @@ export class ContextOptimizer implements INodeType {
 					{
 						name: 'Build Agent Context',
 						value: 'buildAgentContext',
-						description: 'Use when prompt, history, RAG, and tool definitions are already available as separate fields',
+						description:
+							'Use when prompt, history, RAG, and tool definitions are already available as separate fields',
 						action: 'Build optimized agent context',
 					},
 					{
 						name: 'Compile Static Prompt',
 						value: 'compileStaticPrompt',
-						description: 'Use once for a repeated static prompt; returns a smaller stable prompt and hash',
+						description:
+							'Use once for a repeated static prompt; returns a smaller stable prompt and hash',
 						action: 'Compile a static prompt',
 					},
 					{
 						name: 'Optimize Content',
 						value: 'optimizeContent',
-						description: 'Use before an agent when one field contains large JSON, logs, HTML, RAG, or tool output',
+						description:
+							'Use before an agent when one field contains large JSON, logs, HTML, RAG, or tool output',
 						action: 'Optimize content',
 					},
 				],
@@ -232,14 +232,46 @@ export class ContextOptimizer implements INodeType {
 				type: 'options',
 				noDataExpression: true,
 				options: [
-					{ name: 'Auto Detect (Recommended)', value: 'auto', description: 'Choose a safe compressor from the input shape' },
-					{ name: 'Code', value: 'code', description: 'Preserve code exactly; only measure its size' },
-					{ name: 'HTML', value: 'html', description: 'Remove scripts, styles, navigation, and other page boilerplate' },
-					{ name: 'JSON or API Response', value: 'json', description: 'Minify objects and convert repeated records to a shared-schema table' },
-					{ name: 'Logs', value: 'logs', description: 'Remove ANSI codes and collapse consecutive identical lines' },
-					{ name: 'RAG Documents', value: 'rag', description: 'Remove exactly repeated document chunks' },
-					{ name: 'Text', value: 'text', description: 'Normalize formatting and remove exact repeated paragraphs' },
-					{ name: 'Tool Output', value: 'tool_output', description: 'Optimize a result that will be returned to an AI Agent' },
+					{
+						name: 'Auto Detect (Recommended)',
+						value: 'auto',
+						description: 'Choose a safe compressor from the input shape',
+					},
+					{
+						name: 'Code',
+						value: 'code',
+						description: 'Preserve code exactly; only measure its size',
+					},
+					{
+						name: 'HTML',
+						value: 'html',
+						description: 'Remove scripts, styles, navigation, and other page boilerplate',
+					},
+					{
+						name: 'JSON or API Response',
+						value: 'json',
+						description: 'Minify objects and convert repeated records to a shared-schema table',
+					},
+					{
+						name: 'Logs',
+						value: 'logs',
+						description: 'Remove ANSI codes and collapse consecutive identical lines',
+					},
+					{
+						name: 'RAG Documents',
+						value: 'rag',
+						description: 'Remove exactly repeated document chunks',
+					},
+					{
+						name: 'Text',
+						value: 'text',
+						description: 'Normalize formatting and remove exact repeated paragraphs',
+					},
+					{
+						name: 'Tool Output',
+						value: 'tool_output',
+						description: 'Optimize a result that will be returned to an AI Agent',
+					},
 				],
 				default: 'auto',
 				displayOptions: { show: { operation: ['optimizeContent'] } },
@@ -252,7 +284,8 @@ export class ContextOptimizer implements INodeType {
 				typeOptions: { rows: 2 },
 				default: '={{ $json.currentTask || $json.chatInput || "" }}',
 				displayOptions: { show: { operation: ['optimizeContent'] } },
-				description: 'Used only to choose the most relevant preview rows when Context Virtualization is enabled',
+				description:
+					'Used only to choose the most relevant preview rows when Context Virtualization is enabled',
 			},
 			{
 				displayName: 'Content Options',
@@ -268,7 +301,8 @@ export class ContextOptimizer implements INodeType {
 						type: 'string',
 						default: '',
 						placeholder: 'metadata, debug',
-						description: 'JSON only: remove these top-level fields; excluded data is unavailable unless virtualization stores the original',
+						description:
+							'JSON only: remove these top-level fields; excluded data is unavailable unless virtualization stores the original',
 					},
 					{
 						displayName: 'Fields to Include',
@@ -301,16 +335,52 @@ export class ContextOptimizer implements INodeType {
 				typeOptions: { rows: 3 },
 				default: '',
 				placeholder: 'One value per line',
-				description: 'One exact value per line; any missing value makes the node fall back to the original',
+				description:
+					'One exact value per line; any missing value makes the node fall back to the original',
 			},
 			{
 				displayName: 'Enable Context Virtualization',
 				name: 'enableVirtualization',
 				type: 'boolean',
 				default: false,
-				displayOptions: { show: { operation: ['optimizeContent'] } },
+				displayOptions: {
+					show: { '@version': [1], operation: ['optimizeContent'] },
+				},
 				description:
-					'Whether to store large original content and return a smaller preview; connect Token Saver Retriever to the agent',
+					'Whether to store large original content and return a smaller preview; connect Context Saver Retriever to the agent',
+			},
+			{
+				displayName: 'Context Virtualization',
+				name: 'virtualizationMode',
+				type: 'options',
+				noDataExpression: true,
+				options: [
+					{
+						name: 'Automatic (Recommended)',
+						value: 'automatic',
+						description:
+							'Store only large eligible content when doing so produces positive savings; Quality stays inline',
+						action: 'Virtualize automatically',
+					},
+					{
+						name: 'Disabled',
+						value: 'disabled',
+						description: 'Keep optimized content inline and do not create a recoverable resource',
+						action: 'Disable context virtualization',
+					},
+					{
+						name: 'Required',
+						value: 'required',
+						description:
+							'Require storage and a smaller recoverable preview; fail if safe virtualization cannot be completed',
+						action: 'Require recoverable virtualization',
+					},
+				],
+				default: 'automatic',
+				displayOptions: {
+					show: { '@version': [2], operation: ['optimizeContent'] },
+				},
+				description: 'Controls when exact original content moves outside the model prompt',
 			},
 			{
 				displayName: 'Virtualization Options',
@@ -320,6 +390,7 @@ export class ContextOptimizer implements INodeType {
 				default: {},
 				displayOptions: {
 					show: {
+						'@version': [1],
 						operation: ['optimizeContent'],
 						enableVirtualization: [true],
 					},
@@ -383,11 +454,85 @@ export class ContextOptimizer implements INodeType {
 				],
 			},
 			{
+				displayName: 'Virtualization Options',
+				name: 'virtualizationOptionsV2',
+				type: 'collection',
+				placeholder: 'Add Setting',
+				default: {},
+				displayOptions: {
+					show: {
+						'@version': [2],
+						operation: ['optimizeContent'],
+						virtualizationMode: ['automatic', 'required'],
+					},
+				},
+				options: [
+					{
+						displayName: 'Allow Secret-Like Content Storage',
+						name: 'allowSecretLikeContent',
+						type: 'boolean',
+						default: false,
+						description:
+							'Whether secured storage may contain values resembling API keys, passwords, or private keys',
+					},
+					{
+						displayName: 'Maximum Preview Items',
+						name: 'maxItems',
+						type: 'number',
+						typeOptions: { minValue: 1, maxValue: 1000, numberPrecision: 0 },
+						default: 20,
+						description: 'Maximum relevant records, log lines, or chunks retained inline',
+					},
+					{
+						displayName: 'Maximum Preview Tokens',
+						name: 'maxPreviewTokens',
+						type: 'number',
+						typeOptions: { minValue: 100, maxValue: 32000, numberPrecision: 0 },
+						default: 1500,
+						description: 'Hard token target for the relevant inline preview',
+					},
+					{
+						displayName: 'Minimum Content Tokens',
+						name: 'thresholdTokens',
+						type: 'number',
+						typeOptions: { minValue: 100, maxValue: 1000000, numberPrecision: 0 },
+						default: 2000,
+						description:
+							'Automatic mode keeps smaller content inline because storage overhead may cost more',
+					},
+					{
+						displayName: 'Scope',
+						name: 'scope',
+						type: 'string',
+						default: '={{ $workflow.id }}',
+						description: 'Isolation key that must match Context Saver Retriever',
+					},
+					{
+						displayName: 'Storage Directory',
+						name: 'storageDirectory',
+						type: 'string',
+						default: '',
+						placeholder: defaultStorageDirectory(),
+						description: 'Shared self-hosted path also configured in Context Saver Retriever',
+					},
+					{
+						displayName: 'TTL (Hours)',
+						name: 'ttlHours',
+						type: 'number',
+						typeOptions: { minValue: 0.02, maxValue: 8760, numberPrecision: 2 },
+						default: 24,
+						description: 'How long exact content remains retrievable',
+					},
+				],
+			},
+			{
 				displayName: 'Optimization Level',
 				name: 'profile',
 				type: 'options',
 				noDataExpression: true,
-				displayOptions: { show: { operation: ['buildAgentContext'] } },
+				displayOptions: {
+					show: { '@version': [1], operation: ['buildAgentContext'] },
+				},
 				options: [
 					{
 						name: 'Maximum Quality',
@@ -410,12 +555,53 @@ export class ContextOptimizer implements INodeType {
 					{
 						name: 'Custom (Advanced)',
 						value: 'custom',
-						description: 'Control the recent window, token target, and optional unique-content trimming',
+						description:
+							'Control the recent window, token target, and optional unique-content trimming',
 						action: 'Optimize context with custom limits',
 					},
 				],
 				default: 'balanced',
 				description: 'Default levels never remove unique content merely to meet a token budget',
+			},
+			{
+				displayName: 'Profile',
+				name: 'profile',
+				type: 'options',
+				noDataExpression: true,
+				displayOptions: { show: { '@version': [2] } },
+				options: [
+					{
+						name: 'Quality',
+						value: 'quality',
+						description:
+							'Typical eligible saving: 15–35%. Deterministic, reversible optimization with maximum fidelity.',
+						action: 'Prioritize content fidelity',
+					},
+					{
+						name: 'Balanced (Recommended)',
+						value: 'balanced',
+						description:
+							'Typical eligible saving: 35–60%. Conservative task-aware selection with recoverable omission.',
+						action: 'Balance fidelity and savings',
+					},
+					{
+						name: 'Savings',
+						value: 'savings',
+						description:
+							'Typical eligible saving: 60–85%. Small task-aware previews with exact recovery for missing details.',
+						action: 'Maximize recoverable savings',
+					},
+					{
+						name: 'Custom (Advanced)',
+						value: 'custom',
+						description:
+							'Use manual retention and budget settings for specialized context requirements',
+						action: 'Use a custom content policy',
+					},
+				],
+				default: 'balanced',
+				description:
+					'The typical range applies only to context that is safe and eligible to optimize',
 			},
 			{
 				displayName: 'Custom Profile',
@@ -432,14 +618,16 @@ export class ContextOptimizer implements INodeType {
 						name: 'allowUniqueContentTrimming',
 						type: 'boolean',
 						default: false,
-						description: 'Whether to remove older unique history to meet the budget; risky unless the original is retrievable elsewhere',
+						description:
+							'Whether to remove older unique history to meet the budget; risky unless the original is retrievable elsewhere',
 					},
 					{
 						displayName: 'Approximate Deduplication',
 						name: 'approximateDeduplication',
 						type: 'boolean',
 						default: true,
-						description: 'Whether to merge near-duplicates when negation and instruction polarity match',
+						description:
+							'Whether to merge near-duplicates when negation and instruction polarity match',
 					},
 					{
 						displayName: 'Keep Recent Messages',
@@ -455,7 +643,8 @@ export class ContextOptimizer implements INodeType {
 						type: 'number',
 						typeOptions: { minValue: 1, numberPrecision: 0 },
 						default: 16000,
-						description: 'Budget target; unique content remains unless trimming is explicitly allowed below',
+						description:
+							'Budget target; unique content remains unless trimming is explicitly allowed below',
 					},
 					{
 						displayName: 'Summary Threshold Tokens',
@@ -505,12 +694,14 @@ export class ContextOptimizer implements INodeType {
 					{
 						name: 'Detailed Diagnostics',
 						value: 'detailed',
-						description: 'Also return strategies, quality checks, manifests, and virtualization details',
+						description:
+							'Also return strategies, quality checks, manifests, and virtualization details',
 						action: 'Return detailed diagnostics',
 					},
 				],
 				default: 'simple',
-				description: 'Simple output prevents the original large value from being passed to the agent by accident',
+				description:
+					'Simple output prevents the original large value from being passed to the agent by accident',
 			},
 		],
 	};
@@ -521,6 +712,7 @@ export class ContextOptimizer implements INodeType {
 
 		for (let itemIndex = 0; itemIndex < items.length; itemIndex++) {
 			try {
+				const nodeVersion = this.getNode().typeVersion ?? 1;
 				const operation = this.getNodeParameter(
 					'operation',
 					itemIndex,
@@ -536,24 +728,12 @@ export class ContextOptimizer implements INodeType {
 					itemIndex,
 					'simple',
 				) as OutputDetail;
-				const custom = this.getNodeParameter(
-					'customProfile',
-					itemIndex,
-					{},
-				) as CustomProfileConfig;
+				const custom = this.getNodeParameter('customProfile', itemIndex, {}) as CustomProfileConfig;
 
 				if (operation === 'compileStaticPrompt' || operation === 'optimizeContent') {
 					const content = this.getNodeParameter('content', itemIndex, '') as string;
-					const protectedValues = this.getNodeParameter(
-						'protectedValues',
-						itemIndex,
-						'',
-					) as string;
-					const contentOptions = this.getNodeParameter(
-						'contentOptions',
-						itemIndex,
-						{},
-					) as {
+					const protectedValues = this.getNodeParameter('protectedValues', itemIndex, '') as string;
+					const contentOptions = this.getNodeParameter('contentOptions', itemIndex, {}) as {
 						includeFields?: string;
 						excludeFields?: string;
 						removeNulls?: boolean;
@@ -563,11 +743,7 @@ export class ContextOptimizer implements INodeType {
 						contentType:
 							operation === 'compileStaticPrompt'
 								? 'text'
-								: (this.getNodeParameter(
-										'contentType',
-										itemIndex,
-										'auto',
-									) as ContentType),
+								: (this.getNodeParameter('contentType', itemIndex, 'auto') as ContentType),
 						currentTask:
 							operation === 'optimizeContent'
 								? (this.getNodeParameter('currentTask', itemIndex, '') as string)
@@ -584,39 +760,43 @@ export class ContextOptimizer implements INodeType {
 						applied: false,
 						exactRetrievalRequired: false,
 					};
+					const virtualizationMode =
+						nodeVersion >= 2
+							? (this.getNodeParameter('virtualizationMode', itemIndex, 'automatic') as
+									| 'automatic'
+									| 'disabled'
+									| 'required')
+							: (this.getNodeParameter('enableVirtualization', itemIndex, false) as boolean)
+								? 'automatic'
+								: 'disabled';
 					const enableVirtualization =
 						operation === 'optimizeContent' &&
-						(this.getNodeParameter(
-							'enableVirtualization',
-							itemIndex,
-							false,
-						) as boolean);
+						(virtualizationMode === 'required' ||
+							(virtualizationMode === 'automatic' && profile !== 'quality' && profile !== 'safe'));
 					if (enableVirtualization) {
 						const virtualizationOptions = this.getNodeParameter(
-							'virtualizationOptions',
+							nodeVersion >= 2 ? 'virtualizationOptionsV2' : 'virtualizationOptions',
 							itemIndex,
 							{},
 						) as VirtualizationNodeOptions;
-						const thresholdTokens = virtualizationOptions.thresholdTokens ?? 2000;
+						const thresholdTokens =
+							virtualizationMode === 'required'
+								? 0
+								: (virtualizationOptions.thresholdTokens ?? 2000);
 						if (estimateTokens(result.optimizedContent) > thresholdTokens) {
 							try {
 								const store = new FileSystemResourceStore(
-									virtualizationOptions.storageDirectory?.trim() ||
-										defaultStorageDirectory(),
-									(virtualizationOptions.maxResourceMegabytes ?? 10) *
-										1024 *
-										1024,
+									virtualizationOptions.storageDirectory?.trim() || defaultStorageDirectory(),
+									(virtualizationOptions.maxResourceMegabytes ?? 10) * 1024 * 1024,
 								);
 								const resource = await store.store({
 									content,
 									contentType: result.contentType,
 									ttlSeconds: (virtualizationOptions.ttlHours ?? 24) * 3600,
-									scope:
-										virtualizationOptions.scope?.trim() ||
-										this.getWorkflow().id ||
-										'workflow',
+									scope: virtualizationOptions.scope?.trim() || this.getWorkflow().id || 'workflow',
 									recordCount: result.manifest.recordCount,
 									fields: result.manifest.fields,
+									allowSecretLikeContent: virtualizationOptions.allowSecretLikeContent ?? false,
 								});
 								const virtualized = virtualizeContext(
 									result.optimizedContent,
@@ -624,22 +804,15 @@ export class ContextOptimizer implements INodeType {
 									resource.resourceId,
 									{
 										thresholdTokens,
-										maxPreviewTokens:
-											virtualizationOptions.maxPreviewTokens ?? 1500,
+										maxPreviewTokens: virtualizationOptions.maxPreviewTokens ?? 1500,
 										maxItems: virtualizationOptions.maxItems ?? 20,
 										currentTask: options.currentTask,
 										recordCount: result.manifest.recordCount,
 										fields: result.manifest.fields,
 									},
 								);
-								if (
-									virtualized.applied &&
-									virtualized.previewTokens < result.tokens.optimized
-								) {
-									const saved = Math.max(
-										0,
-										result.tokens.original - virtualized.previewTokens,
-									);
+								if (virtualized.applied && virtualized.previewTokens < result.tokens.optimized) {
+									const saved = Math.max(0, result.tokens.original - virtualized.previewTokens);
 									result = {
 										...result,
 										optimizedContent: virtualized.content,
@@ -655,19 +828,12 @@ export class ContextOptimizer implements INodeType {
 											savingsPercent:
 												result.tokens.original === 0
 													? 0
-													: Number(
-															(
-																(saved / result.tokens.original) *
-																100
-															).toFixed(2),
-														),
+													: Number(((saved / result.tokens.original) * 100).toFixed(2)),
 											areEstimated: true,
 										},
 										manifest: {
 											...result.manifest,
-											optimizedBytes: Buffer.byteLength(
-												virtualized.content,
-											),
+											optimizedBytes: Buffer.byteLength(virtualized.content),
 										},
 									};
 									contextVirtualization = {
@@ -679,6 +845,13 @@ export class ContextOptimizer implements INodeType {
 									};
 								} else {
 									await store.delete(resource.resourceId);
+									if (virtualizationMode === 'required') {
+										throw new NodeOperationError(
+											this.getNode(),
+											'Required virtualization produced no positive token savings',
+											{ itemIndex },
+										);
+									}
 									contextVirtualization = {
 										applied: false,
 										exactRetrievalRequired: false,
@@ -686,12 +859,18 @@ export class ContextOptimizer implements INodeType {
 									};
 								}
 							} catch (error) {
+								if (virtualizationMode === 'required') {
+									throw new NodeOperationError(
+										this.getNode(),
+										error instanceof Error ? error : new Error(String(error)),
+										{ itemIndex },
+									);
+								}
 								contextVirtualization = {
 									applied: false,
 									exactRetrievalRequired: false,
 									fallbackReason: 'storage_error',
-									warning:
-										error instanceof Error ? error.message : String(error),
+									warning: error instanceof Error ? error.message : String(error),
 								};
 							}
 						}
@@ -708,16 +887,8 @@ export class ContextOptimizer implements INodeType {
 					continue;
 				}
 
-				const useSummarizer = this.getNodeParameter(
-					'useSummarizer',
-					itemIndex,
-					false,
-				) as boolean;
-				const timeoutMs = this.getNodeParameter(
-					'summarizerTimeoutMs',
-					itemIndex,
-					30000,
-				) as number;
+				const useSummarizer = this.getNodeParameter('useSummarizer', itemIndex, false) as boolean;
+				const timeoutMs = this.getNodeParameter('summarizerTimeoutMs', itemIndex, 30000) as number;
 
 				let summaryAdapter: SummaryAdapter | undefined;
 				if (useSummarizer) {
@@ -757,11 +928,7 @@ export class ContextOptimizer implements INodeType {
 				const result = await optimizeContext(
 					{
 						systemPrompt: this.getNodeParameter('systemPrompt', itemIndex, ''),
-						conversationHistory: this.getNodeParameter(
-							'conversationHistory',
-							itemIndex,
-							'',
-						),
+						conversationHistory: this.getNodeParameter('conversationHistory', itemIndex, ''),
 						retrievedContext: this.getNodeParameter('retrievedContext', itemIndex, ''),
 						toolDefinitions: this.getNodeParameter('toolDefinitions', itemIndex, ''),
 						currentMessage: this.getNodeParameter('currentMessage', itemIndex, '') as string,

@@ -180,14 +180,17 @@ export class FileSystemResourceStore implements ResourceStore {
 			if (hash !== manifest.originalHash) {
 				throw new ResourceIntegrityError(resourceId);
 			}
-			const accessedManifest = {
-				...manifest,
-				lastAccessedAt: new Date().toISOString(),
-			};
-			await this.writeAtomic(
-				this.path(resourceId, '.manifest.json'),
-				`${JSON.stringify(accessedManifest, null, 2)}\n`,
-			);
+			const shouldRefreshAccess =
+				!manifest.lastAccessedAt || Date.now() - Date.parse(manifest.lastAccessedAt) >= 60_000;
+			const accessedManifest = shouldRefreshAccess
+				? { ...manifest, lastAccessedAt: new Date().toISOString() }
+				: manifest;
+			if (shouldRefreshAccess) {
+				await this.writeAtomic(
+					this.path(resourceId, '.manifest.json'),
+					`${JSON.stringify(accessedManifest, null, 2)}\n`,
+				);
+			}
 			return { manifest: accessedManifest, content };
 		} catch (error) {
 			if ((error as NodeJS.ErrnoException).code === 'ENOENT') {

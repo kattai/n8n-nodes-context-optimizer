@@ -39,7 +39,7 @@ function parseObject(value: unknown): unknown {
 
 export class TokenAnalytics implements INodeType {
 	description: INodeTypeDescription = {
-		displayName: 'Token Savings',
+		displayName: 'Context Saver Metrics',
 		name: 'tokenAnalytics',
 		icon: {
 			light: 'file:token-analytics.svg',
@@ -48,10 +48,12 @@ export class TokenAnalytics implements INodeType {
 		// @ts-expect-error n8n's public type currently omits the supported false value.
 		usableAsTool: false,
 		group: ['transform'],
-		version: 1,
+		version: [1, 2],
+		defaultVersion: 2,
 		subtitle: '={{$parameter["operation"]}}',
-		description: 'Show concise token savings; use after Token Saver nodes or for an A/B model comparison',
-		defaults: { name: 'Token Savings' },
+		description:
+			'Show eligible, full-request, provider, and net savings after Context Saver nodes or A/B model comparisons',
+		defaults: { name: 'Context Saver Metrics' },
 		inputs: [NodeConnectionTypes.Main],
 		outputs: [NodeConnectionTypes.Main],
 		properties: [
@@ -70,7 +72,7 @@ export class TokenAnalytics implements INodeType {
 					{
 						name: 'Analyze Savings',
 						value: 'analyze',
-						description: 'Use after Token Saver Content or with normalized token fields',
+						description: 'Use after Context Saver Content or with normalized token fields',
 						action: 'Analyze an item',
 					},
 					{
@@ -100,20 +102,18 @@ export class TokenAnalytics implements INodeType {
 				name: 'baselineModelNode',
 				type: 'string',
 				required: true,
-				default: 'Measured Chat Model — Baseline',
+				default: 'Context Saver Model — Baseline',
 				displayOptions: { show: { operation: ['compareCurrentExecution'] } },
-				description:
-					'Exact node name of a Token Saver Chat Model configured as Measure Baseline',
+				description: 'Exact node name of a Context Saver Model configured as Measure Baseline',
 			},
 			{
 				displayName: 'Optimized Model Wrapper',
 				name: 'optimizedModelNode',
 				type: 'string',
 				required: true,
-				default: 'Optimized Chat Model — Balanced',
+				default: 'Context Saver Model — Balanced',
 				displayOptions: { show: { operation: ['compareCurrentExecution'] } },
-				description:
-					'Exact node name of a Token Saver Chat Model configured as Save Tokens',
+				description: 'Exact node name of a Context Saver Model configured as Save Tokens',
 			},
 			{
 				displayName: 'Metrics',
@@ -123,7 +123,7 @@ export class TokenAnalytics implements INodeType {
 				default: '={{ $json }}',
 				displayOptions: { show: { operation: ['analyze', 'estimateCost'] } },
 				description:
-					'Accepts Token Saver output, model telemetry, or normalized original/sent token fields',
+					'Accepts Context Saver output, model telemetry, or normalized original/sent token fields',
 			},
 			{
 				displayName: 'Baseline Metrics',
@@ -203,7 +203,8 @@ export class TokenAnalytics implements INodeType {
 					{
 						name: 'Detailed Diagnostics',
 						value: 'detailed',
-						description: 'Also return normalized metrics, provider usage, overhead, rates, and latency',
+						description:
+							'Also return normalized metrics, provider usage, overhead, rates, and latency',
 						action: 'Return detailed token diagnostics',
 					},
 				],
@@ -216,23 +217,13 @@ export class TokenAnalytics implements INodeType {
 	async execute(this: IExecuteFunctions): Promise<INodeExecutionData[][]> {
 		const items = this.getInputData();
 		const operation = this.getNodeParameter('operation', 0) as AnalyticsOperation;
-		const outputDetail = this.getNodeParameter(
-			'outputDetail',
-			0,
-			'simple',
-		) as OutputDetail;
+		const outputDetail = this.getNodeParameter('outputDetail', 0, 'simple') as OutputDetail;
 
 		try {
 			if (operation === 'compareCurrentExecution') {
 				const executionId = this.getExecutionId();
-				const baselineNodeName = this.getNodeParameter(
-					'baselineModelNode',
-					0,
-				) as string;
-				const optimizedNodeName = this.getNodeParameter(
-					'optimizedModelNode',
-					0,
-				) as string;
+				const baselineNodeName = this.getNodeParameter('baselineModelNode', 0) as string;
+				const optimizedNodeName = this.getNodeParameter('optimizedModelNode', 0) as string;
 				const baseline = getModelTelemetry(executionId, baselineNodeName);
 				const optimized = getModelTelemetry(executionId, optimizedNodeName);
 				if (!baseline || !optimized) {
@@ -297,31 +288,19 @@ export class TokenAnalytics implements INodeType {
 					const pricing: TokenPricing | undefined =
 						operation === 'estimateCost'
 							? {
-									inputPerMillion: this.getNodeParameter(
-										'inputPrice',
-										itemIndex,
-										0,
-									) as number,
+									inputPerMillion: this.getNodeParameter('inputPrice', itemIndex, 0) as number,
 									cachedInputPerMillion: this.getNodeParameter(
 										'cachedInputPrice',
 										itemIndex,
 										0,
 									) as number,
-									outputPerMillion: this.getNodeParameter(
-										'outputPrice',
-										itemIndex,
-										0,
-									) as number,
+									outputPerMillion: this.getNodeParameter('outputPrice', itemIndex, 0) as number,
 									reasoningPerMillion: this.getNodeParameter(
 										'reasoningPrice',
 										itemIndex,
 										0,
 									) as number,
-									currency: this.getNodeParameter(
-										'currency',
-										itemIndex,
-										'USD',
-									) as string,
+									currency: this.getNodeParameter('currency', itemIndex, 'USD') as string,
 								}
 							: undefined;
 					analytics = analyzeTokens(metrics, pricing);

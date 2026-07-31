@@ -1,6 +1,8 @@
 export interface TokenMeasurement {
 	original: number;
 	sent: number;
+	eligibleOriginal: number;
+	eligibleSent: number;
 	compressor: number;
 	retrieved: number;
 	verifier: number;
@@ -22,6 +24,7 @@ export interface TokenMeasurement {
 	profile?: string;
 	cacheStrategy?: string;
 	cacheDecision?: string;
+	targetNotReachedReason?: string;
 	strategies: string[];
 }
 
@@ -58,6 +61,22 @@ export interface TokenAnalysis {
 		cacheUsageAvailable: boolean;
 	};
 	measurementConfidence: 'provider_actual' | 'provider_partial' | 'optimizer_estimate';
+	scopes: {
+		eligible: {
+			available: boolean;
+			before: number;
+			after: number;
+			saved: number;
+			percent: number;
+		};
+		fullRequest: { before: number; after: number; saved: number; percent: number };
+		provider: { available: boolean; input: number; cachedInput: number; output: number };
+		net: { saved: number; percent: number; overhead: number; positive: boolean };
+	};
+	recommendation: {
+		action: 'keep' | 'measure_provider' | 'adjust_profile' | 'reduce_retrieval' | 'review_quality';
+		reason: string;
+	};
 	cost?: {
 		before: number;
 		after: number;
@@ -89,9 +108,7 @@ function finite(value: unknown): number {
 }
 
 function percent(numerator: number, denominator: number): number {
-	return denominator === 0
-		? 0
-		: Number(((numerator / denominator) * 100).toFixed(2));
+	return denominator === 0 ? 0 : Number(((numerator / denominator) * 100).toFixed(2));
 }
 
 function record(value: unknown): Record<string, unknown> {
@@ -122,7 +139,11 @@ function hasNested(root: Record<string, unknown>, path: string): boolean {
 }
 
 function stringList(value: unknown): string[] {
-	if (Array.isArray(value)) return value.map(String).map((entry) => entry.trim()).filter(Boolean);
+	if (Array.isArray(value))
+		return value
+			.map(String)
+			.map((entry) => entry.trim())
+			.filter(Boolean);
 	if (typeof value !== 'string') return [];
 	return value
 		.split(/\r?\n|,/)
@@ -157,6 +178,7 @@ export function normalizeMeasurement(value: unknown): TokenMeasurement {
 				'tokensBeforeEstimated',
 				'tokenSavings.before',
 				'optimization.tokensBefore',
+				'optimization.tokensBeforeEstimated',
 				'contentOptimization.tokens.original',
 				'contentOptimization.tokens.before',
 			),
@@ -171,8 +193,27 @@ export function normalizeMeasurement(value: unknown): TokenMeasurement {
 				'tokensAfterEstimated',
 				'tokenSavings.after',
 				'optimization.tokensAfter',
+				'optimization.tokensAfterEstimated',
 				'contentOptimization.tokens.optimized',
 				'contentOptimization.tokens.after',
+			),
+		),
+		eligibleOriginal: finite(
+			nested(
+				metrics,
+				'eligibleOriginal',
+				'eligible.before',
+				'eligibleTokensBefore',
+				'optimization.eligibleTokensBefore',
+			),
+		),
+		eligibleSent: finite(
+			nested(
+				metrics,
+				'eligibleSent',
+				'eligible.after',
+				'eligibleTokensAfter',
+				'optimization.eligibleTokensAfter',
 			),
 		),
 		compressor: finite(nested(metrics, 'compressor', 'tokens.compressor', 'compressorTokens')),
@@ -200,28 +241,13 @@ export function normalizeMeasurement(value: unknown): TokenMeasurement {
 			),
 		),
 		actualInput: finite(
-			nested(
-				metrics,
-				'actualInput',
-				'actual.inputTokens',
-				'providerUsage.inputTokens',
-			),
+			nested(metrics, 'actualInput', 'actual.inputTokens', 'providerUsage.inputTokens'),
 		),
 		actualOutput: finite(
-			nested(
-				metrics,
-				'actualOutput',
-				'actual.outputTokens',
-				'providerUsage.outputTokens',
-			),
+			nested(metrics, 'actualOutput', 'actual.outputTokens', 'providerUsage.outputTokens'),
 		),
 		actualTotal: finite(
-			nested(
-				metrics,
-				'actualTotal',
-				'actual.totalTokens',
-				'providerUsage.totalTokens',
-			),
+			nested(metrics, 'actualTotal', 'actual.totalTokens', 'providerUsage.totalTokens'),
 		),
 		providerUsageAvailable: Boolean(
 			nested(metrics, 'providerUsageAvailable', 'actual.available', 'providerUsage.available'),
@@ -230,9 +256,7 @@ export function normalizeMeasurement(value: unknown): TokenMeasurement {
 		latencyMs: finite(
 			nested(metrics, 'latencyMs', 'durationMs', 'optimization.durationMs', 'metrics.durationMs'),
 		),
-		fallbacks: finite(
-			nested(metrics, 'fallbacks', 'fallbackCount', 'optimization.fallback'),
-		),
+		fallbacks: finite(nested(metrics, 'fallbacks', 'fallbackCount', 'optimization.fallback')),
 		qualityGuardFailures:
 			qualityGuardFailures !== undefined
 				? finite(qualityGuardFailures)
@@ -258,6 +282,10 @@ export function normalizeMeasurement(value: unknown): TokenMeasurement {
 		cacheDecision:
 			String(nested(metrics, 'cacheDecision', 'optimization.cacheDecision') ?? '').trim() ||
 			undefined,
+		targetNotReachedReason:
+			String(
+				nested(metrics, 'targetNotReachedReason', 'optimization.targetNotReachedReason') ?? '',
+			).trim() || undefined,
 		strategies: stringList(
 			nested(metrics, 'strategies', 'strategyUsed', 'contentOptimization.strategies'),
 		),
@@ -297,6 +325,36 @@ export function analyzeTokens(
 			? 'provider_actual'
 			: 'provider_partial'
 		: 'optimizer_estimate';
+	const fullAfter = actualAvailable ? measurement.actualInput : measurement.sent;
+	const fullSaved = measurement.original - fullAfter;
+	const netSaved = fullSaved - overhead;
+	const eligibleAvailable = measurement.eligibleOriginal > 0;
+	const eligibleSaved = eligibleAvailable
+		? measurement.eligibleOriginal - measurement.eligibleSent
+		: 0;
+	let recommendation: TokenAnalysis['recommendation'];
+	if (
+		measurement.qualityGuardFailures > 0 ||
+		measurement.targetNotReachedReason === 'quality_fallback'
+	) {
+		recommendation = { action: 'review_quality', reason: 'quality_guard_failed' };
+	} else if (
+		measurement.targetNotReachedReason === 'retriever_unavailable' ||
+		measurement.targetNotReachedReason === 'virtualization_not_configured'
+	) {
+		recommendation = {
+			action: 'adjust_profile',
+			reason: measurement.targetNotReachedReason,
+		};
+	} else if (netSaved <= 0) {
+		recommendation = { action: 'adjust_profile', reason: 'non_positive_net_savings' };
+	} else if (measurement.retrieved > fullSaved * 0.4) {
+		recommendation = { action: 'reduce_retrieval', reason: 'retrieval_overhead_high' };
+	} else if (!actualAvailable) {
+		recommendation = { action: 'measure_provider', reason: 'provider_usage_unavailable' };
+	} else {
+		recommendation = { action: 'keep', reason: 'positive_net_savings' };
+	}
 	const result: TokenAnalysis = {
 		measurement,
 		savings: {
@@ -308,10 +366,7 @@ export function analyzeTokens(
 		},
 		rates: {
 			retrievalPercent: percent(measurement.retrieved, measurement.original),
-			cacheHitPercent: percent(
-				Math.min(measurement.cached, measurement.sent),
-				measurement.sent,
-			),
+			cacheHitPercent: percent(Math.min(measurement.cached, measurement.sent), measurement.sent),
 		},
 		actual: {
 			available: actualAvailable,
@@ -325,6 +380,34 @@ export function analyzeTokens(
 			cacheUsageAvailable: actualAvailable && measurement.cacheUsageAvailable,
 		},
 		measurementConfidence,
+		scopes: {
+			eligible: {
+				available: eligibleAvailable,
+				before: measurement.eligibleOriginal,
+				after: measurement.eligibleSent,
+				saved: eligibleSaved,
+				percent: percent(eligibleSaved, measurement.eligibleOriginal),
+			},
+			fullRequest: {
+				before: measurement.original,
+				after: fullAfter,
+				saved: fullSaved,
+				percent: percent(fullSaved, measurement.original),
+			},
+			provider: {
+				available: actualAvailable,
+				input: measurement.actualInput,
+				cachedInput: cachedInputTokens,
+				output: measurement.actualOutput,
+			},
+			net: {
+				saved: netSaved,
+				percent: percent(netSaved, measurement.original),
+				overhead,
+				positive: netSaved > 0,
+			},
+		},
+		recommendation,
 	};
 
 	const pricingConfigured =
@@ -344,17 +427,14 @@ export function analyzeTokens(
 		const reasoningIncludedInOutput = Math.max(0, reasoningTokens - reasoningOutsideOutput);
 		const regularOutputTokens = Math.max(
 			0,
-			(actualAvailable ? measurement.actualOutput : measurement.output) -
-				reasoningIncludedInOutput,
+			(actualAvailable ? measurement.actualOutput : measurement.output) - reasoningIncludedInOutput,
 		);
 		const outputCost =
 			pricing.reasoningPerMillion !== undefined
 				? (regularOutputTokens / 1_000_000) * pricing.outputPerMillion +
 					(reasoningTokens / 1_000_000) * pricing.reasoningPerMillion
 				: (billableOutputTokens / 1_000_000) * pricing.outputPerMillion;
-		const before =
-			(measurement.original / 1_000_000) * pricing.inputPerMillion +
-			outputCost;
+		const before = (measurement.original / 1_000_000) * pricing.inputPerMillion + outputCost;
 		const after =
 			(regularInput / 1_000_000) * pricing.inputPerMillion +
 			(cached / 1_000_000) * pricing.cachedInputPerMillion +
@@ -379,6 +459,8 @@ export function aggregateMeasurements(values: unknown[]): TokenAnalysis {
 	const aggregate: TokenMeasurement = {
 		original: 0,
 		sent: 0,
+		eligibleOriginal: 0,
+		eligibleSent: 0,
 		compressor: 0,
 		retrieved: 0,
 		verifier: 0,
@@ -407,6 +489,8 @@ export function aggregateMeasurements(values: unknown[]): TokenAnalysis {
 		for (const key of [
 			'original',
 			'sent',
+			'eligibleOriginal',
+			'eligibleSent',
 			'compressor',
 			'retrieved',
 			'verifier',
@@ -433,7 +517,8 @@ export function aggregateMeasurements(values: unknown[]): TokenAnalysis {
 		if (measurement.cacheDecision) cacheDecisions.add(measurement.cacheDecision);
 		for (const strategy of measurement.strategies) strategies.add(strategy);
 	}
-	aggregate.profile = profiles.size === 1 ? [...profiles][0] : profiles.size > 1 ? 'mixed' : undefined;
+	aggregate.profile =
+		profiles.size === 1 ? [...profiles][0] : profiles.size > 1 ? 'mixed' : undefined;
 	aggregate.cacheStrategy =
 		cacheStrategies.size === 1
 			? [...cacheStrategies][0]
@@ -465,11 +550,8 @@ export function compareRuns(baselineInput: unknown, optimizedInput: unknown): Ru
 			latencyMs: optimized.measurement.latencyMs - baseline.measurement.latencyMs,
 			fallbacks: optimized.measurement.fallbacks - baseline.measurement.fallbacks,
 			qualityGuardFailures:
-				optimized.measurement.qualityGuardFailures -
-				baseline.measurement.qualityGuardFailures,
-			inputTokenBasis: actualInputAvailable
-				? 'provider-actual'
-				: 'optimizer-estimate',
+				optimized.measurement.qualityGuardFailures - baseline.measurement.qualityGuardFailures,
+			inputTokenBasis: actualInputAvailable ? 'provider-actual' : 'optimizer-estimate',
 			...(baseline.cost && optimized.cost
 				? { cost: optimized.cost.after - baseline.cost.after }
 				: {}),

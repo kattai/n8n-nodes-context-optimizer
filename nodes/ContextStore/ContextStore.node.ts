@@ -28,7 +28,7 @@ function list(value: string): string[] {
 
 export class ContextStore implements INodeType {
 	description: INodeTypeDescription = {
-		displayName: 'Token Saver Store',
+		displayName: 'Context Saver Store',
 		name: 'contextStore',
 		icon: {
 			light: 'file:context-store.svg',
@@ -37,11 +37,12 @@ export class ContextStore implements INodeType {
 		// @ts-expect-error n8n's public type currently omits the supported false value.
 		usableAsTool: false,
 		group: ['transform'],
-		version: 1,
+		version: [1, 2],
+		defaultVersion: 2,
 		subtitle: '={{$parameter["operation"]}}',
 		description:
-			'Keep large original data outside the AI prompt so Token Saver Retriever can recover exact details',
-		defaults: { name: 'Token Saver Store' },
+			'Keep large original data outside the AI prompt so Context Saver Retriever can recover exact details',
+		defaults: { name: 'Context Saver Store' },
 		inputs: [NodeConnectionTypes.Main],
 		outputs: [NodeConnectionTypes.Main],
 		properties: [
@@ -122,7 +123,7 @@ export class ContextStore implements INodeType {
 				required: true,
 				default: '={{ $workflow.id }}',
 				displayOptions: { show: { operation: ['store', 'inspect', 'delete'] } },
-				description: 'Isolation key; use the same value in Token Saver Retriever',
+				description: 'Isolation key; use the same value in Context Saver Retriever',
 			},
 			{
 				displayName: 'Fields',
