@@ -1,6 +1,8 @@
 import type { CanonicalContext } from '../context/types';
 
-export type OptimizerProfileName = 'safe' | 'balanced' | 'aggressive' | 'custom';
+export type PublicOptimizerProfileName = 'quality' | 'balanced' | 'savings' | 'custom';
+export type LegacyOptimizerProfileName = 'safe' | 'aggressive';
+export type OptimizerProfileName = PublicOptimizerProfileName | LegacyOptimizerProfileName;
 
 export interface CustomProfileConfig {
 	keepRecentMessages?: number;
@@ -8,15 +10,24 @@ export interface CustomProfileConfig {
 	summaryThresholdTokens?: number;
 	approximateDeduplication?: boolean;
 	allowUniqueContentTrimming?: boolean;
+	minimumNetSavingsTokens?: number;
+	eligibleSavingsMinPercent?: number;
+	eligibleSavingsMaxPercent?: number;
 }
 
 export interface ResolvedProfile {
 	name: OptimizerProfileName;
+	canonicalName: PublicOptimizerProfileName;
 	keepRecentMessages: number;
 	maxInputTokens: number;
 	summaryThresholdTokens: number;
 	approximateDeduplication: boolean;
 	allowUniqueContentTrimming: boolean;
+	minimumNetSavingsTokens: number;
+	eligibleSavingsMinPercent: number;
+	eligibleSavingsMaxPercent: number;
+	virtualization: 'disabled' | 'automatic' | 'required';
+	semanticOptimization: boolean;
 }
 
 export interface OptimizeContextInput {
@@ -56,6 +67,7 @@ export type FallbackReason =
 	| 'empty_result'
 	| 'token_budget_unmet'
 	| 'negative_net_savings'
+	| 'minimum_net_savings_not_met'
 	| 'internal_error';
 
 export interface OptimizationMetrics {

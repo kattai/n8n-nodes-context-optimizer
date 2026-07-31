@@ -318,6 +318,7 @@ export async function optimizeContext(
 			originalTokens: estimateSections(Object.values(original)),
 			sentTokens: estimateSections(Object.values(optimized)),
 			compressorTokens,
+			minimumNetSavingsTokens: profile.minimumNetSavingsTokens,
 		});
 		if (!net.useOptimized) {
 			return createResult(original, original, profile, startedAt, {
@@ -329,7 +330,7 @@ export async function optimizeContext(
 					...warnings,
 					`Optimization skipped because net savings would be ${net.netTokens} tokens.`,
 				],
-				fallbackReason: 'negative_net_savings',
+				fallbackReason: net.reason ?? 'negative_net_savings',
 			});
 		}
 

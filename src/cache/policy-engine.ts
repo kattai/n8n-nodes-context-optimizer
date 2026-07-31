@@ -4,6 +4,7 @@ import type {
 	CachePolicyInput,
 	CachePolicyReason,
 } from './policy-types';
+import { isSavingsProfile } from '../core/profiles';
 
 function decision(
 	action: CachePolicyAction,
@@ -15,9 +16,7 @@ function decision(
 }
 
 function reductionAction(input: CachePolicyInput): CachePolicyAction {
-	return input.profile === 'aggressive' && input.virtualizationReady
-		? 'virtualize'
-		: 'optimize';
+	return isSavingsProfile(input.profile) && input.virtualizationReady ? 'virtualize' : 'optimize';
 }
 
 export function decideCacheAction(input: CachePolicyInput): CachePolicyDecision {
@@ -59,21 +58,14 @@ export function decideCacheAction(input: CachePolicyInput): CachePolicyDecision 
 		}
 		return decision(
 			reductionAction(input),
-			input.volatility === 'variable'
-				? 'variable_eligible_block'
-				: 'cache_priority_not_eligible',
+			input.volatility === 'variable' ? 'variable_eligible_block' : 'cache_priority_not_eligible',
 			false,
 			'medium',
 		);
 	}
 
 	if (input.volatility === 'variable') {
-		return decision(
-			reductionAction(input),
-			'variable_eligible_block',
-			false,
-			'high',
-		);
+		return decision(reductionAction(input), 'variable_eligible_block', false, 'high');
 	}
 	return decision('preserve', 'uncertain_preserved', largeCommonPrefix, 'low');
 }

@@ -1,7 +1,7 @@
 import { deduplicateUnits } from '../core/deduplicate';
 import { optimizeContent } from '../content/optimize-content';
 import { extractProtectedFacts } from '../core/protected-facts';
-import { resolveProfile } from '../core/profiles';
+import { isSavingsProfile, resolveProfile } from '../core/profiles';
 import { estimateTokens } from '../core/token-estimator';
 import type { OptimizeContextOptions } from '../core/types';
 import { extractProviderUsage } from '../analytics/provider-usage';
@@ -413,7 +413,7 @@ async function optimizeToolResults(
 ): Promise<{ messages: unknown[]; changed: boolean; metrics: ToolOptimizationMetrics }> {
 	let changed = false;
 	const metrics = emptyToolMetrics(
-		options.profile === 'aggressive' && !options.maximumSavings
+		isSavingsProfile(options.profile) && !options.maximumSavings
 			? 'virtualization_not_configured'
 			: undefined,
 	);
@@ -440,7 +440,7 @@ async function optimizeToolResults(
 		}
 
 		let content = result.optimizedContent;
-		if (options.profile === 'aggressive' && options.maximumSavings) {
+		if (isSavingsProfile(options.profile) && options.maximumSavings) {
 			const virtualized = await virtualizeMaximumSavingsToolResult({
 				originalContent: toolText,
 				structural: result,
