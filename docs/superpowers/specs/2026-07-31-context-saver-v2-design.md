@@ -1,8 +1,11 @@
 # Context Saver v2 — design aprovado
 
-Data: 2026-07-31  
-Status: aprovado para planejamento e implementação  
-Pacote técnico: `n8n-nodes-context-optimizer`  
+Data: 2026-07-31
+
+Status: aprovado para planejamento e implementação
+
+Pacote técnico: `n8n-nodes-context-optimizer`
+
 Nome exibido no n8n: `Context Saver`
 
 ## 1. Objetivo
