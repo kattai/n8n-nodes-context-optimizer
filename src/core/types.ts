@@ -1,4 +1,6 @@
 import type { CanonicalContext } from '../context/types';
+import type { SemanticPipelineConfiguration } from '../semantic/types';
+import type { QualityVerificationLevel } from '../quality/verification-policy';
 
 export type PublicOptimizerProfileName = 'quality' | 'balanced' | 'savings' | 'custom';
 export type LegacyOptimizerProfileName = 'safe' | 'aggressive';
@@ -42,6 +44,8 @@ export interface OptimizeContextInput {
 export interface OptimizeContextOptions {
 	profile?: OptimizerProfileName;
 	custom?: CustomProfileConfig;
+	semantic?: SemanticPipelineConfiguration;
+	qualityLevel?: QualityVerificationLevel;
 }
 
 export interface SummaryRequest {
@@ -68,6 +72,7 @@ export type FallbackReason =
 	| 'token_budget_unmet'
 	| 'negative_net_savings'
 	| 'minimum_net_savings_not_met'
+	| 'quality_guard_failed'
 	| 'internal_error';
 
 export interface OptimizationMetrics {
@@ -89,6 +94,10 @@ export interface OptimizationMetrics {
 	fallback: boolean;
 	fallbackReason?: FallbackReason;
 	durationMs: number;
+	semanticMethods?: string[];
+	semanticFallbackUsed?: boolean;
+	semanticConfidence?: number;
+	verificationTokens?: number;
 }
 
 export interface OptimizeContextResult {

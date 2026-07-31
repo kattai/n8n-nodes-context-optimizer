@@ -1,4 +1,5 @@
 import type { OptimizerProfileName } from '../core/types';
+import type { QualityVerificationLevel } from '../quality/verification-policy';
 
 export type ContentType =
 	| 'auto'
@@ -25,6 +26,7 @@ export interface ContentOptimizationOptions {
 	excludeJsonPaths?: string[];
 	protectedJsonPaths?: string[];
 	dictionaryEncoding?: boolean;
+	qualityLevel?: QualityVerificationLevel;
 }
 
 export interface ContentManifest {

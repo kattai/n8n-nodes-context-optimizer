@@ -82,6 +82,8 @@ export interface UpdateMemorySessionInput {
 	messages?: MemoryMessageInput[];
 	summaryCandidate?: string;
 	summaryBasedOnRevision?: number;
+	summaryRequiredValues?: string[];
+	summaryMaximumTokens?: number;
 	archivedResources?: Array<string | { resourceId: string; description?: string }>;
 }
 

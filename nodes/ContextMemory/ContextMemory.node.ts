@@ -203,6 +203,32 @@ export class ContextMemory implements INodeType {
 					'Optional optimistic-lock revision; -1 accepts the summary against the current session',
 			},
 			{
+				displayName: 'Summary Safety',
+				name: 'summarySafety',
+				type: 'collection',
+				placeholder: 'Add Safety Option',
+				default: {},
+				displayOptions: { show: { operation: ['update'] } },
+				options: [
+					{
+						displayName: 'Maximum Summary Tokens',
+						name: 'maximumTokens',
+						type: 'number',
+						typeOptions: { minValue: 100, maxValue: 32000, numberPrecision: 0 },
+						default: 4000,
+						description: 'Reject a summary above this estimated token count',
+					},
+					{
+						displayName: 'Required Exact Values',
+						name: 'requiredValues',
+						type: 'string',
+						typeOptions: { rows: 3 },
+						default: '',
+						description: 'One exact value per line; summary is rejected if any value disappears',
+					},
+				],
+			},
+			{
 				displayName: 'Archived Resource References',
 				name: 'archivedResources',
 				type: 'json',
@@ -324,6 +350,10 @@ export class ContextMemory implements INodeType {
 							itemIndex,
 							-1,
 						) as number;
+						const summarySafety = this.getNodeParameter('summarySafety', itemIndex, {}) as {
+							maximumTokens?: number;
+							requiredValues?: string;
+						};
 						const update: UpdateMemorySessionInput = {
 							sessionKey,
 							scope,
@@ -353,6 +383,11 @@ export class ContextMemory implements INodeType {
 							) as UpdateMemorySessionInput['archivedResources'],
 							...(summaryCandidate.trim() ? { summaryCandidate } : {}),
 							...(summaryBasedOnRevision >= 0 ? { summaryBasedOnRevision } : {}),
+							summaryMaximumTokens: summarySafety.maximumTokens ?? 4000,
+							summaryRequiredValues: String(summarySafety.requiredValues ?? '')
+								.split(/\r?\n/)
+								.map((value) => value.trim())
+								.filter(Boolean),
 						};
 						const updated = await memory.updateSession(update);
 						result = {

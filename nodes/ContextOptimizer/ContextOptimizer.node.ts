@@ -8,6 +8,7 @@ import type {
 import { NodeConnectionTypes, NodeOperationError } from 'n8n-workflow';
 import { optimizeContent } from '../../src/content/optimize-content';
 import type { ContentOptimizationOptions, ContentType } from '../../src/content/types';
+import type { QualityVerificationLevel } from '../../src/quality/verification-policy';
 import { optimizeContext } from '../../src/core/optimizer';
 import { estimateTokens } from '../../src/core/token-estimator';
 import { resolvePreviewPolicy } from '../../src/policy/preview-policy';
@@ -17,6 +18,11 @@ import type {
 	SummaryAdapter,
 	SummaryRequest,
 } from '../../src/core/types';
+import type {
+	SemanticPipelineAdapters,
+	SemanticSelectionRequest,
+	SemanticJudgeRequest,
+} from '../../src/semantic/types';
 import {
 	defaultStorageDirectory,
 	FileSystemResourceStore,
@@ -43,6 +49,17 @@ interface VirtualizationNodeOptions {
 	scope?: string;
 	storageDirectory?: string;
 	maxResourceMegabytes?: number;
+}
+
+interface SemanticNodeOptions {
+	deduplicate?: boolean;
+	judge?: boolean;
+	maximumSelectedUnits?: number;
+	maximumUnits?: number;
+	minimumConfidence?: number;
+	rerank?: boolean;
+	summary?: boolean;
+	tokenBudget?: number;
 }
 
 function list(value: string): string[] {
@@ -84,6 +101,65 @@ function summaryPrompt(request: SummaryRequest): string {
 		'CONTEXTO:',
 		request.text,
 	].join('\n\n');
+}
+
+function semanticSelectionPrompt(
+	operation: 'deduplicate' | 'rerank',
+	request: SemanticSelectionRequest,
+): string {
+	const instruction =
+		operation === 'deduplicate'
+			? 'Return the IDs that must remain after removing only semantically redundant units.'
+			: 'Rank every useful unit ID from most to least relevant to the current task.';
+	return [
+		'You are a context selection adapter. Never rewrite facts.',
+		instruction,
+		'Every protected ID must be included. Never create IDs.',
+		operation === 'deduplicate'
+			? 'Return JSON only: {"keepIds":["..."],"confidence":0.0}'
+			: 'Return JSON only: {"rankedIds":["..."],"confidence":0.0}',
+		`Current task: ${request.currentTask}`,
+		`Protected IDs: ${JSON.stringify(request.protectedIds)}`,
+		`Units: ${JSON.stringify(request.units.map(({ id, source, text, protected: isProtected }) => ({ id, source, text, protected: isProtected })))}`,
+	].join('\n\n');
+}
+
+function semanticJudgePrompt(request: SemanticJudgeRequest): string {
+	return [
+		'Compare original and candidate context. Detect omissions or contradictions.',
+		'Protected values must remain exact. Do not repair the candidate.',
+		'Return JSON only: {"meaningPreserved":true,"missingFacts":[],"contradictions":[],"confidence":0.0}',
+		`Current task: ${request.currentTask}`,
+		`Protected values: ${JSON.stringify(request.protectedValues)}`,
+		`Original: ${request.original}`,
+		`Candidate: ${request.candidate}`,
+	].join('\n\n');
+}
+
+function responseJson(response: unknown): Record<string, unknown> {
+	const text = responseText(response).trim();
+	const unfenced = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '');
+	const start = unfenced.indexOf('{');
+	const end = unfenced.lastIndexOf('}');
+	if (start < 0 || end < start) return {};
+	try {
+		const value = JSON.parse(unfenced.slice(start, end + 1)) as unknown;
+		return value && typeof value === 'object' && !Array.isArray(value)
+			? (value as Record<string, unknown>)
+			: {};
+	} catch {
+		return {};
+	}
+}
+
+function stringArray(value: unknown): string[] {
+	return Array.isArray(value)
+		? value.filter((entry): entry is string => typeof entry === 'string')
+		: [];
+}
+
+function confidence(value: unknown): number {
+	return typeof value === 'number' && Number.isFinite(value) ? value : 0;
 }
 
 const summaryTimeout = Symbol('summary-timeout');
@@ -658,6 +734,35 @@ export class ContextOptimizer implements INodeType {
 				],
 			},
 			{
+				displayName: 'Quality Verification',
+				name: 'qualityLevel',
+				type: 'options',
+				noDataExpression: true,
+				displayOptions: { show: { '@version': [2] } },
+				options: [
+					{
+						name: 'Fast',
+						value: 'fast',
+						description: 'Check exact protected values, blocks, non-empty output, and structure',
+						action: 'Run fast verification',
+					},
+					{
+						name: 'Strict (Recommended)',
+						value: 'strict',
+						description: 'Also reject changed negations and protected-value polarity',
+						action: 'Run strict verification',
+					},
+					{
+						name: 'Critical',
+						value: 'critical',
+						description: 'Also require quoted values to remain exact; best for sensitive workflows',
+						action: 'Run critical verification',
+					},
+				],
+				default: 'strict',
+				description: 'Deterministic checks always run; failed candidates fall back safely',
+			},
+			{
 				displayName: 'Experimental Semantic Compression',
 				name: 'useSummarizer',
 				type: 'boolean',
@@ -679,6 +784,83 @@ export class ContextOptimizer implements INodeType {
 					},
 				},
 				description: 'Maximum time to wait for a summary before falling back',
+			},
+			{
+				displayName: 'Semantic Pipeline',
+				name: 'semanticOptions',
+				type: 'collection',
+				placeholder: 'Add Experimental Setting',
+				default: {},
+				displayOptions: {
+					show: { '@version': [2], operation: ['buildAgentContext'], useSummarizer: [true] },
+				},
+				description:
+					'Optional paid adapter calls; every stage is measured and falls back to deterministic context',
+				options: [
+					{
+						displayName: 'LLM Judge',
+						name: 'judge',
+						type: 'boolean',
+						default: false,
+						description:
+							'Whether to make one verification call; deterministic protected-fact checks still run',
+					},
+					{
+						displayName: 'LLM Summary',
+						name: 'summary',
+						type: 'boolean',
+						default: true,
+						description: 'Whether to make one summary call above the configured threshold',
+					},
+					{
+						displayName: 'Maximum Selected Units',
+						name: 'maximumSelectedUnits',
+						type: 'number',
+						typeOptions: { minValue: 1, maxValue: 100, numberPrecision: 0 },
+						default: 12,
+						description: 'Maximum units retained by task reranking, including protected units',
+					},
+					{
+						displayName: 'Maximum Units per Adapter Call',
+						name: 'maximumUnits',
+						type: 'number',
+						typeOptions: { minValue: 2, maxValue: 200, numberPrecision: 0 },
+						default: 40,
+						description: 'Larger inputs skip semantic selection instead of causing a costly call',
+					},
+					{
+						displayName: 'Minimum Confidence',
+						name: 'minimumConfidence',
+						type: 'number',
+						typeOptions: { minValue: 0, maxValue: 1, numberPrecision: 2 },
+						default: 0.85,
+						description: 'Lower-confidence adapter output is ignored',
+					},
+					{
+						displayName: 'Reranked Context Token Budget',
+						name: 'tokenBudget',
+						type: 'number',
+						typeOptions: { minValue: 50, maxValue: 128000, numberPrecision: 0 },
+						default: 4000,
+						description: 'Hard estimated budget for selected semantic units',
+					},
+					{
+						displayName: 'Semantic Deduplication',
+						name: 'deduplicate',
+						type: 'boolean',
+						default: false,
+						description:
+							'Whether to make one adapter call that removes only confident redundant units; protected and recent units remain',
+					},
+					{
+						displayName: 'Task Reranking',
+						name: 'rerank',
+						type: 'boolean',
+						default: false,
+						description:
+							'Whether to make one relevance call; requires Custom profile with Allow Unique Content Trimming',
+					},
+				],
 			},
 			{
 				displayName: 'Output',
@@ -730,6 +912,11 @@ export class ContextOptimizer implements INodeType {
 					'simple',
 				) as OutputDetail;
 				const custom = this.getNodeParameter('customProfile', itemIndex, {}) as CustomProfileConfig;
+				const qualityLevel = this.getNodeParameter(
+					'qualityLevel',
+					itemIndex,
+					'strict',
+				) as QualityVerificationLevel;
 
 				if (operation === 'compileStaticPrompt' || operation === 'optimizeContent') {
 					const content = this.getNodeParameter('content', itemIndex, '') as string;
@@ -755,6 +942,7 @@ export class ContextOptimizer implements INodeType {
 						excludeFields: list(contentOptions.excludeFields ?? ''),
 						removeNulls: contentOptions.removeNulls,
 						removeEmptyStrings: contentOptions.removeEmptyStrings,
+						qualityLevel,
 					};
 					let result = optimizeContent(content, options);
 					let contextVirtualization: Record<string, unknown> = {
@@ -893,8 +1081,13 @@ export class ContextOptimizer implements INodeType {
 
 				const useSummarizer = this.getNodeParameter('useSummarizer', itemIndex, false) as boolean;
 				const timeoutMs = this.getNodeParameter('summarizerTimeoutMs', itemIndex, 30000) as number;
+				const semanticNodeOptions =
+					nodeVersion >= 2
+						? (this.getNodeParameter('semanticOptions', itemIndex, {}) as SemanticNodeOptions)
+						: {};
 
 				let summaryAdapter: SummaryAdapter | undefined;
+				const semanticAdapters: SemanticPipelineAdapters = {};
 				if (useSummarizer) {
 					const connected = (await this.getInputConnectionData(
 						NodeConnectionTypes.AiLanguageModel,
@@ -907,26 +1100,84 @@ export class ContextOptimizer implements INodeType {
 							{ itemIndex },
 						);
 					}
-					summaryAdapter = {
-						summarize: async (request) => {
-							const prompt = summaryPrompt(request);
-							const response = await withTimeout(
-								(signal) => connected.invoke(prompt, { signal }),
-								timeoutMs,
-							);
-							if (response === summaryTimeout) {
-								throw new NodeOperationError(this.getNode(), 'Compression model timeout', {
-									itemIndex,
-								});
-							}
-							const text = responseText(response);
-							return {
-								text,
-								warnings: [],
-								compressorTokens: estimateTokens(prompt) + estimateTokens(text),
-							};
-						},
+					const invokeStructured = async (
+						prompt: string,
+					): Promise<{ value: Record<string, unknown>; tokens: number }> => {
+						const response = await withTimeout(
+							(signal) => connected.invoke(prompt, { signal }),
+							timeoutMs,
+						);
+						if (response === summaryTimeout) {
+							throw new NodeOperationError(this.getNode(), 'Semantic adapter timeout', {
+								itemIndex,
+							});
+						}
+						return {
+							value: responseJson(response),
+							tokens: estimateTokens(prompt) + estimateTokens(responseText(response)),
+						};
 					};
+					if (semanticNodeOptions.summary !== false)
+						summaryAdapter = {
+							summarize: async (request) => {
+								const prompt = summaryPrompt(request);
+								const response = await withTimeout(
+									(signal) => connected.invoke(prompt, { signal }),
+									timeoutMs,
+								);
+								if (response === summaryTimeout) {
+									throw new NodeOperationError(this.getNode(), 'Compression model timeout', {
+										itemIndex,
+									});
+								}
+								const text = responseText(response);
+								return {
+									text,
+									warnings: [],
+									compressorTokens: estimateTokens(prompt) + estimateTokens(text),
+								};
+							},
+						};
+					if (semanticNodeOptions.deduplicate) {
+						semanticAdapters.deduplication = {
+							deduplicate: async (request) => {
+								const result = await invokeStructured(
+									semanticSelectionPrompt('deduplicate', request),
+								);
+								return {
+									keepIds: stringArray(result.value.keepIds),
+									confidence: confidence(result.value.confidence),
+									compressorTokens: result.tokens,
+								};
+							},
+						};
+					}
+					if (semanticNodeOptions.rerank) {
+						semanticAdapters.reranking = {
+							rerank: async (request) => {
+								const result = await invokeStructured(semanticSelectionPrompt('rerank', request));
+								return {
+									rankedIds: stringArray(result.value.rankedIds),
+									confidence: confidence(result.value.confidence),
+									compressorTokens: result.tokens,
+								};
+							},
+						};
+					}
+					if (semanticNodeOptions.judge) {
+						semanticAdapters.judge = {
+							verify: async (request) => {
+								const result = await invokeStructured(semanticJudgePrompt(request));
+								return {
+									meaningPreserved: result.value.meaningPreserved === true,
+									missingFacts: stringArray(result.value.missingFacts),
+									contradictions: stringArray(result.value.contradictions),
+									confidence: confidence(result.value.confidence),
+									verificationTokens: result.tokens,
+								};
+							},
+						};
+					}
 				}
 
 				const result = await optimizeContext(
@@ -938,8 +1189,22 @@ export class ContextOptimizer implements INodeType {
 						currentMessage: this.getNodeParameter('currentMessage', itemIndex, '') as string,
 						protectedValues: this.getNodeParameter('protectedValues', itemIndex, '') as string,
 					},
-					{ profile, custom },
+					{
+						profile,
+						custom,
+						qualityLevel,
+						semantic: {
+							deduplicate: semanticNodeOptions.deduplicate ?? false,
+							rerank: semanticNodeOptions.rerank ?? false,
+							judge: semanticNodeOptions.judge ?? false,
+							minimumConfidence: semanticNodeOptions.minimumConfidence ?? 0.85,
+							maximumUnits: semanticNodeOptions.maximumUnits ?? 40,
+							maximumSelectedUnits: semanticNodeOptions.maximumSelectedUnits ?? 12,
+							tokenBudget: semanticNodeOptions.tokenBudget ?? 4000,
+						},
+					},
 					summaryAdapter,
+					semanticAdapters,
 				);
 
 				returnData.push({

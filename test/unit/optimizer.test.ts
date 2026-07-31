@@ -55,6 +55,92 @@ describe('optimizeContext', () => {
 		expect(result.optimization.summaryModelUsed).toBe(true);
 	});
 
+	it('does not call semantic adapters unless explicitly enabled', async () => {
+		const deduplicate = vi.fn(async () => ({ keepIds: ['history:0'], confidence: 1 }));
+		await optimizeContext(
+			{ conversationHistory: 'Unique history remains.', currentMessage: 'Continue.' },
+			{},
+			undefined,
+			{ deduplication: { deduplicate } },
+		);
+		expect(deduplicate).not.toHaveBeenCalled();
+	});
+
+	it('applies confident semantic deduplication and measures adapter tokens', async () => {
+		const history = [
+			'Long account discussion about delivery and approval. '.repeat(20),
+			'Equivalent account discussion about delivery and approval. '.repeat(20),
+			'Unrelated archived detail that can remain.',
+			'Latest user correction must remain intact.',
+		].join('\n');
+		const result = await optimizeContext(
+			{ conversationHistory: history, currentMessage: 'Summarize delivery approval.' },
+			{
+				profile: 'custom',
+				custom: { keepRecentMessages: 1 },
+				semantic: { deduplicate: true, minimumConfidence: 0.8 },
+			},
+			undefined,
+			{
+				deduplication: {
+					deduplicate: async () => ({
+						keepIds: ['history:0', 'history:2', 'history:3'],
+						confidence: 0.97,
+						compressorTokens: 5,
+					}),
+				},
+			},
+		);
+		expect(result.optimization).toMatchObject({
+			strategy: 'hybrid',
+			semanticMethods: ['semantic-deduplication'],
+			semanticFallbackUsed: false,
+			compressorTokens: 5,
+		});
+		expect(result.optimizedHistory).toContain('Latest user correction');
+		expect(result.optimizedHistory).not.toContain('Equivalent account discussion');
+	});
+
+	it('uses deterministic context when the optional semantic judge rejects a candidate', async () => {
+		const history = [
+			...Array.from({ length: 40 }, () => 'Old repeated operational context.'),
+			'Latest context must remain.',
+		].join('\n');
+		const result = await optimizeContext(
+			{ conversationHistory: history, currentMessage: 'Continue.' },
+			{
+				profile: 'custom',
+				custom: { keepRecentMessages: 1 },
+				semantic: { deduplicate: true, judge: true, minimumConfidence: 0.8 },
+			},
+			undefined,
+			{
+				deduplication: {
+					deduplicate: async () => ({
+						keepIds: ['history:1'],
+						confidence: 0.98,
+					}),
+				},
+				judge: {
+					verify: async () => ({
+						meaningPreserved: false,
+						missingFacts: [],
+						contradictions: ['meaning changed'],
+						confidence: 0.99,
+						verificationTokens: 20,
+					}),
+				},
+			},
+		);
+		expect(result.optimization).toMatchObject({
+			strategy: 'deterministic',
+			semanticMethods: [],
+			semanticFallbackUsed: true,
+			verificationTokens: 20,
+		});
+		expect(result.optimizedHistory).toContain('Old repeated operational context');
+	});
+
 	it('fails open when a summary loses a protected fact', async () => {
 		const input = {
 			conversationHistory: 'Cliente confirmou R$ 2.400,00 para 23/07/2026 às 14:00.'.repeat(20),
@@ -75,9 +161,9 @@ describe('optimizeContext', () => {
 			},
 		);
 
-		expect(result.optimization.fallback).toBe(true);
-		expect(result.optimization.fallbackReason).toBe('protected_fact_missing');
-		expect(result.optimizedHistory).toBe(input.conversationHistory);
+		expect(result.optimization.semanticFallbackUsed).toBe(true);
+		expect(result.optimizedHistory).toContain('R$ 2.400,00');
+		expect(result.optimizedHistory).toContain('23/07/2026');
 	});
 
 	it('keeps old user corrections, pending questions, and unique context', async () => {
@@ -133,7 +219,9 @@ describe('optimizeContext', () => {
 
 		expect(result.optimization.tokensAfter).toBeLessThanOrEqual(100);
 		expect(result.optimization.budgetMet).toBe(true);
-		expect(result.optimization.warnings).toContain('Context trimmed to the configured token budget.');
+		expect(result.optimization.warnings).toContain(
+			'Context trimmed to the configured token budget.',
+		);
 	});
 
 	it('does not trim unique content in balanced mode when the budget is exceeded', async () => {

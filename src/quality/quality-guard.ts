@@ -2,6 +2,48 @@ import { extractProtectedFacts } from '../core/protected-facts';
 import { extractProtectedBlocks } from '../content/protected-blocks';
 import type { ContentManifest, ContentQuality, QualityCheck } from '../content/types';
 import { unpackJsonV2 } from '../content/json-roundtrip';
+import { resolveVerificationPolicy, type QualityVerificationLevel } from './verification-policy';
+
+const negationPattern = /\b(?:n[aã]o|nunca|jamais|sem|not|never|without)\b/iu;
+
+function units(content: string): string[] {
+	return content
+		.split(/\r?\n|(?<=[.!?])\s+/)
+		.map((value) => value.trim())
+		.filter(Boolean);
+}
+
+function normalizeStatement(value: string): string {
+	return value
+		.normalize('NFD')
+		.replace(/[\u0300-\u036f]/g, '')
+		.replace(/\s+/g, ' ')
+		.toLowerCase();
+}
+
+function negatedStatements(content: string): string[] {
+	return units(content)
+		.filter((value) => negationPattern.test(value))
+		.map(normalizeStatement);
+}
+
+function quotedValues(content: string): string[] {
+	return unique(
+		[...content.matchAll(/["'“”‘’]([^"'“”‘’\r\n]{2,})["'“”‘’]/gu)].map(
+			(match) => match[0]?.trim() ?? '',
+		),
+	);
+}
+
+function factPolarityPreserved(original: string, optimized: string, facts: string[]): boolean {
+	for (const fact of facts) {
+		const originalUnit = units(original).find((unit) => unit.includes(fact));
+		if (!originalUnit || !negationPattern.test(originalUnit)) continue;
+		const optimizedUnit = units(optimized).find((unit) => unit.includes(fact));
+		if (!optimizedUnit || !negationPattern.test(optimizedUnit)) return false;
+	}
+	return true;
+}
 
 function unique(values: string[]): string[] {
 	return [...new Set(values.filter(Boolean))];
@@ -45,7 +87,9 @@ export function checkContentQuality(
 	optimized: string,
 	manifest: ContentManifest,
 	protectedValues?: string[] | string,
+	level: QualityVerificationLevel = 'strict',
 ): ContentQuality {
+	const policy = resolveVerificationPolicy(level);
 	const checks: QualityCheck[] = [];
 	const facts = unique([
 		...extractProtectedFacts(original).map((fact) => fact.value),
@@ -59,6 +103,31 @@ export function checkContentQuality(
 			? { detail: `${missingFacts.length} protected value(s) missing` }
 			: {}),
 	});
+
+	if (policy.checkFactPolarity) {
+		checks.push({
+			name: 'fact-polarity',
+			passed: factPolarityPreserved(original, optimized, facts),
+		});
+	}
+	if (policy.checkNegatedStatements) {
+		const originalNegated = negatedStatements(original);
+		const optimizedNegated = new Set(negatedStatements(optimized));
+		checks.push({
+			name: 'negated-statements',
+			passed: originalNegated.every((statement) => optimizedNegated.has(statement)),
+		});
+	}
+	if (policy.checkQuotedValues) {
+		const missingQuoted = quotedValues(original).filter((value) => !optimized.includes(value));
+		checks.push({
+			name: 'quoted-values',
+			passed: missingQuoted.length === 0,
+			...(missingQuoted.length > 0
+				? { detail: `${missingQuoted.length} quoted value(s) missing` }
+				: {}),
+		});
+	}
 
 	const missingBlocks = extractProtectedBlocks(original).filter(
 		(block) => !optimized.includes(block.value),

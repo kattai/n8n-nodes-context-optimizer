@@ -213,6 +213,29 @@ describe('Token Saver node descriptions', () => {
 		});
 	});
 
+	it('keeps semantic adapter calls opt-in and version 2 only', () => {
+		const semantic = property(new ContextOptimizer(), 'semanticOptions');
+		expect(semantic).toMatchObject({
+			type: 'collection',
+			displayOptions: { show: { '@version': [2], useSummarizer: [true] } },
+		});
+		const options = semantic.options as Array<{ name: string; default: unknown }>;
+		expect(options.find((entry) => entry.name === 'deduplicate')?.default).toBe(false);
+		expect(options.find((entry) => entry.name === 'rerank')?.default).toBe(false);
+		expect(options.find((entry) => entry.name === 'judge')?.default).toBe(false);
+	});
+
+	it('defaults Context Saver v2 to strict deterministic verification', () => {
+		expect(property(new ContextOptimizer(), 'qualityLevel')).toMatchObject({
+			default: 'strict',
+			displayOptions: { show: { '@version': [2] } },
+		});
+		expect(property(new ContextMemory(), 'summarySafety')).toMatchObject({
+			type: 'collection',
+			displayOptions: { show: { operation: ['update'] } },
+		});
+	});
+
 	it('keeps an explicit retrieval operation when the provider supplies it', () => {
 		expect(
 			normalizeToolRequest({

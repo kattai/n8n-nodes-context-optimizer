@@ -202,6 +202,10 @@ export class FileSystemMemoryManager {
 			throw new Error('ttlSeconds must be greater than zero');
 		}
 		const recentWindow = Math.min(100, Math.max(1, Math.floor(input.recentWindow ?? 6)));
+		const summaryMaximumTokens = Math.min(
+			32_000,
+			Math.max(100, Math.floor(input.summaryMaximumTokens ?? 4_000)),
+		);
 		const path = this.path(sessionKey, scope);
 
 		return await this.withSessionLock(path, async () => {
@@ -255,6 +259,8 @@ export class FileSystemMemoryManager {
 					session.revision,
 					now,
 					input.summaryBasedOnRevision,
+					(input.summaryRequiredValues ?? []).map(String),
+					summaryMaximumTokens,
 				);
 				if (summaryResult.summary) session.incrementalSummary = summaryResult.summary;
 				if (summaryResult.warning) warnings.push(summaryResult.warning);

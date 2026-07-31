@@ -88,6 +88,7 @@ export function optimizeContent(
 		compressed.content,
 		manifest,
 		options.protectedValues,
+		options.qualityLevel,
 	);
 	const compressedTokens = tokenMetrics(content, compressed.content);
 	const noPositiveSavings =

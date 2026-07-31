@@ -1,9 +1,18 @@
 import { compressHistory, compressSection } from './deterministic-compressor';
 import { normalizeSection, splitUnits } from './normalize';
 import { resolveProfile } from './profiles';
-import { extractProtectedFacts, validateProtectedFacts } from './protected-facts';
+import { extractProtectedFacts } from './protected-facts';
 import { estimateSections, estimateTokens } from './token-estimator';
 import { calculateNetSavings } from '../tokens/token-counter';
+import { semanticDeduplicate } from '../semantic/semantic-deduplicator';
+import { semanticRerank } from '../semantic/semantic-reranker';
+import { selectQualityFallback } from '../quality/fallback-controller';
+import type { ContentManifest } from '../content/types';
+import type {
+	SemanticPipelineAdapters,
+	SemanticPipelineConfiguration,
+	SemanticUnit,
+} from '../semantic/types';
 import type {
 	FallbackReason,
 	OptimizeContextInput,
@@ -47,6 +56,16 @@ function combined(input: NormalizedInput): string {
 	]
 		.filter(Boolean)
 		.join('\n\n');
+}
+
+function textManifest(original: string, optimized: string): ContentManifest {
+	return {
+		contentType: 'text',
+		originalHash: '',
+		originalBytes: Buffer.byteLength(original),
+		optimizedBytes: Buffer.byteLength(optimized),
+		format: 'text',
+	};
 }
 
 function enforceTokenBudget(
@@ -167,6 +186,10 @@ function createResult(
 		protectedFactsCount: number;
 		warnings?: string[];
 		fallbackReason?: FallbackReason;
+		semanticMethods?: string[];
+		semanticFallbackUsed?: boolean;
+		semanticConfidence?: number;
+		verificationTokens?: number;
 	},
 ): OptimizeContextResult {
 	const before = estimateSections(Object.values(original));
@@ -177,6 +200,7 @@ function createResult(
 		originalTokens: before,
 		sentTokens: after,
 		compressorTokens: options.compressorTokens,
+		verificationTokens: options.verificationTokens,
 	});
 
 	return {
@@ -205,7 +229,79 @@ function createResult(
 			fallback: options.strategy === 'fallback',
 			fallbackReason: options.fallbackReason,
 			durationMs: Date.now() - startedAt,
+			semanticMethods: options.semanticMethods ?? [],
+			semanticFallbackUsed: options.semanticFallbackUsed ?? false,
+			...(options.semanticConfidence !== undefined
+				? { semanticConfidence: options.semanticConfidence }
+				: {}),
+			verificationTokens: options.verificationTokens ?? 0,
 		},
+	};
+}
+
+function containsToolSequence(text: string): boolean {
+	return /"(?:role)"\s*:\s*"(?:tool|function)"|"(?:tool_calls|tool_call_id|toolCalls|toolCallId)"\s*:/i.test(
+		text,
+	);
+}
+
+function semanticUnits(
+	context: NormalizedInput,
+	profile: ResolvedProfile,
+	protectedValues: string[],
+): SemanticUnit[] {
+	const history = splitUnits(context.history);
+	const retrieved = splitUnits(context.retrievedContext);
+	const protectedHistoryStart = Math.max(0, history.length - profile.keepRecentMessages);
+	return [
+		...history.map((text, index) => ({
+			id: `history:${index}`,
+			source: 'history' as const,
+			index,
+			text,
+			protected:
+				index >= protectedHistoryStart || protectedValues.some((value) => text.includes(value)),
+		})),
+		...retrieved.map((text, index) => ({
+			id: `retrieved:${index}`,
+			source: 'retrieved_context' as const,
+			index,
+			text,
+			protected: protectedValues.some((value) => text.includes(value)),
+		})),
+	];
+}
+
+function contextFromSemanticUnits(
+	context: NormalizedInput,
+	units: SemanticUnit[],
+): NormalizedInput {
+	return {
+		...context,
+		history: units
+			.filter((unit) => unit.source === 'history')
+			.sort((left, right) => left.index - right.index)
+			.map((unit) => unit.text)
+			.join('\n'),
+		retrievedContext: units
+			.filter((unit) => unit.source === 'retrieved_context')
+			.sort((left, right) => left.index - right.index)
+			.map((unit) => unit.text)
+			.join('\n'),
+	};
+}
+
+function semanticConfig(
+	value: SemanticPipelineConfiguration | undefined,
+): Required<SemanticPipelineConfiguration> {
+	return {
+		deduplicate: value?.deduplicate ?? false,
+		rerank: value?.rerank ?? false,
+		judge: value?.judge ?? false,
+		minimumConfidence: Math.min(1, Math.max(0, value?.minimumConfidence ?? 0.85)),
+		maximumUnits: Math.max(2, Math.floor(value?.maximumUnits ?? 40)),
+		maximumSelectedUnits: Math.max(1, Math.floor(value?.maximumSelectedUnits ?? 12)),
+		tokenBudget: Math.max(50, Math.floor(value?.tokenBudget ?? 4_000)),
 	};
 }
 
@@ -213,6 +309,7 @@ export async function optimizeContext(
 	input: OptimizeContextInput,
 	options: OptimizeContextOptions = {},
 	summaryAdapter?: SummaryAdapter,
+	semanticAdapters: SemanticPipelineAdapters = {},
 ): Promise<OptimizeContextResult> {
 	const startedAt = Date.now();
 	const profile = resolveProfile(options.profile ?? 'balanced', options.custom);
@@ -234,8 +331,76 @@ export async function optimizeContext(
 		let summaryModelUsed = false;
 		let compressorTokens = 0;
 		const warnings: string[] = [];
+		const semanticMethods: string[] = [];
+		let semanticFallbackUsed = false;
+		let semanticConfidence: number | undefined;
+		let verificationTokens = 0;
+		let semanticCandidateRejectedReason: string | undefined;
+		const configuredSemantic = semanticConfig(options.semantic);
+		const semanticRequested = configuredSemantic.deduplicate || configuredSemantic.rerank;
+		if (semanticRequested && containsToolSequence(deterministic.history)) {
+			semanticFallbackUsed = true;
+			warnings.push('Semantic selection skipped because tool-call history must remain intact.');
+		} else if (semanticRequested) {
+			let units = semanticUnits(
+				deterministic,
+				profile,
+				facts.map((fact) => fact.value),
+			);
+			if (configuredSemantic.deduplicate && semanticAdapters.deduplication && units.length > 1) {
+				const deduplicated = await semanticDeduplicate(units, semanticAdapters.deduplication, {
+					currentTask: original.currentMessage,
+					minimumConfidence: configuredSemantic.minimumConfidence,
+					maximumUnits: configuredSemantic.maximumUnits,
+				});
+				compressorTokens += deduplicated.compressorTokens;
+				semanticConfidence = deduplicated.confidence;
+				if (deduplicated.applied) {
+					units = deduplicated.units;
+					optimized = contextFromSemanticUnits(deterministic, units);
+					semanticMethods.push('semantic-deduplication');
+					strategy = 'hybrid';
+				} else {
+					semanticFallbackUsed = true;
+					warnings.push(`Semantic deduplication skipped: ${deduplicated.fallbackReason}.`);
+				}
+			} else if (configuredSemantic.deduplicate && !semanticAdapters.deduplication) {
+				semanticFallbackUsed = true;
+				warnings.push('Semantic deduplication skipped because no adapter was connected.');
+			}
+			if (configuredSemantic.rerank) {
+				if (!profile.allowUniqueContentTrimming) {
+					semanticFallbackUsed = true;
+					warnings.push(
+						'Semantic reranking requires Custom profile with Allow Unique Content Trimming.',
+					);
+				} else if (semanticAdapters.reranking && units.length > 1) {
+					const reranked = await semanticRerank(units, semanticAdapters.reranking, {
+						currentTask: original.currentMessage,
+						minimumConfidence: configuredSemantic.minimumConfidence,
+						maximumUnits: configuredSemantic.maximumUnits,
+						maximumSelectedUnits: configuredSemantic.maximumSelectedUnits,
+						tokenBudget: configuredSemantic.tokenBudget,
+					});
+					compressorTokens += reranked.compressorTokens;
+					semanticConfidence = Math.min(semanticConfidence ?? 1, reranked.confidence);
+					if (reranked.applied) {
+						units = reranked.units;
+						optimized = contextFromSemanticUnits(deterministic, units);
+						semanticMethods.push('semantic-reranking');
+						strategy = 'hybrid';
+					} else {
+						semanticFallbackUsed = true;
+						warnings.push(`Semantic reranking skipped: ${reranked.fallbackReason}.`);
+					}
+				} else if (!semanticAdapters.reranking) {
+					semanticFallbackUsed = true;
+					warnings.push('Semantic reranking skipped because no adapter was connected.');
+				}
+			}
+		}
 
-		const eligibleText = [deterministic.history, deterministic.retrievedContext]
+		const eligibleText = [optimized.history, optimized.retrievedContext]
 			.filter(Boolean)
 			.join('\n\n');
 		if (
@@ -249,25 +414,68 @@ export async function optimizeContext(
 				maxTokens: Math.min(profile.maxInputTokens, profile.summaryThresholdTokens),
 				protectedValues: facts.map((fact) => fact.value),
 			});
-			compressorTokens = summary.compressorTokens ?? 0;
+			compressorTokens += summary.compressorTokens ?? 0;
 			if (!summary.text.trim()) {
-				return createResult(original, original, profile, startedAt, {
-					strategy: 'fallback',
-					summaryModelUsed,
-					compressorTokens,
-					protectedFactsCount: facts.length,
-					fallbackReason: 'invalid_summary',
-				});
+				optimized = deterministic;
+				strategy = 'deterministic';
+				semanticFallbackUsed = true;
+				semanticCandidateRejectedReason = 'invalid_summary';
+				warnings.push('Empty semantic summary rejected; deterministic context was used.');
+			} else {
+				optimized = {
+					...optimized,
+					history: summary.text.trim(),
+					retrievedContext: '',
+				};
+				strategy = 'hybrid';
+				semanticMethods.push('llm-summary');
+				warnings.push(...(summary.warnings ?? []));
 			}
-			optimized = {
-				...deterministic,
-				history: summary.text.trim(),
-				retrievedContext: '',
-			};
-			strategy = 'hybrid';
-			warnings.push(...(summary.warnings ?? []));
 		}
 
+		if (configuredSemantic.judge && semanticAdapters.judge && semanticMethods.length > 0) {
+			try {
+				const judged = await semanticAdapters.judge.verify({
+					original: [deterministic.history, deterministic.retrievedContext]
+						.filter(Boolean)
+						.join('\n\n'),
+					candidate: [optimized.history, optimized.retrievedContext].filter(Boolean).join('\n\n'),
+					currentTask: original.currentMessage,
+					protectedValues: facts.map((fact) => fact.value),
+				});
+				verificationTokens += Math.max(0, judged.verificationTokens ?? 0);
+				semanticConfidence = Math.min(semanticConfidence ?? 1, judged.confidence);
+				if (
+					!judged.meaningPreserved ||
+					judged.missingFacts.length > 0 ||
+					judged.contradictions.length > 0 ||
+					judged.confidence < configuredSemantic.minimumConfidence
+				) {
+					optimized = deterministic;
+					strategy = 'deterministic';
+					semanticFallbackUsed = true;
+					semanticCandidateRejectedReason = 'semantic_judge_rejected';
+					semanticMethods.length = 0;
+					warnings.push('Semantic candidate rejected by the optional judge.');
+				}
+			} catch {
+				optimized = deterministic;
+				strategy = 'deterministic';
+				semanticFallbackUsed = true;
+				semanticCandidateRejectedReason = 'semantic_judge_error';
+				semanticMethods.length = 0;
+				warnings.push('Semantic judge failed; deterministic context was used.');
+			}
+		} else if (configuredSemantic.judge && !semanticAdapters.judge && semanticMethods.length > 0) {
+			optimized = deterministic;
+			strategy = 'deterministic';
+			semanticFallbackUsed = true;
+			semanticCandidateRejectedReason = 'semantic_judge_missing';
+			semanticMethods.length = 0;
+			warnings.push('Semantic candidate rejected because no judge adapter was connected.');
+		}
+
+		let deterministicCandidate = deterministic;
 		if (profile.allowUniqueContentTrimming) {
 			const budget = enforceTokenBudget(
 				optimized,
@@ -275,63 +483,97 @@ export async function optimizeContext(
 				facts.map((fact) => fact.value),
 			);
 			if (!budget.budgetMet) {
-				return createResult(original, original, profile, startedAt, {
-					strategy: 'fallback',
-					summaryModelUsed,
-					compressorTokens,
-					protectedFactsCount: facts.length,
-					warnings: ['Configured token budget cannot preserve all protected content.'],
-					fallbackReason: 'token_budget_unmet',
-				});
+				optimized = deterministic;
+				strategy = 'deterministic';
+				semanticFallbackUsed = true;
+				semanticCandidateRejectedReason = 'token_budget_unmet';
+				warnings.push('Semantic candidate could not meet the configured token budget.');
+			} else {
+				optimized = budget.context;
+				if (budget.trimmed) warnings.push('Context trimmed to the configured token budget.');
 			}
-			optimized = budget.context;
-			if (budget.trimmed) {
-				warnings.push('Context trimmed to the configured token budget.');
+			const deterministicBudget = enforceTokenBudget(
+				deterministic,
+				profile.maxInputTokens,
+				facts.map((fact) => fact.value),
+			);
+			if (deterministicBudget.budgetMet) {
+				deterministicCandidate = deterministicBudget.context;
+			} else {
+				warnings.push('Deterministic context cannot meet budget while preserving protected data.');
 			}
 		} else if (estimateSections(Object.values(optimized)) > profile.maxInputTokens) {
 			warnings.push('Token budget exceeded; unique content was preserved.');
 		}
 
-		if (!combined(optimized).trim()) {
-			return createResult(original, original, profile, startedAt, {
-				strategy: 'fallback',
-				summaryModelUsed,
-				compressorTokens,
-				protectedFactsCount: facts.length,
-				fallbackReason: 'empty_result',
-			});
-		}
-
-		const validation = validateProtectedFacts(facts, combined(optimized));
-		if (!validation.valid) {
-			return createResult(original, original, profile, startedAt, {
-				strategy: 'fallback',
-				summaryModelUsed,
-				compressorTokens,
-				protectedFactsCount: facts.length,
-				warnings: [`Missing protected values: ${validation.missing.join(', ')}`],
-				fallbackReason: 'protected_fact_missing',
-			});
-		}
-
-		const net = calculateNetSavings({
-			originalTokens: estimateSections(Object.values(original)),
-			sentTokens: estimateSections(Object.values(optimized)),
+		const originalText = combined(original);
+		const optimizedText = combined(optimized);
+		const deterministicText = combined(deterministicCandidate);
+		const fallback = selectQualityFallback({
+			original: {
+				name: 'original',
+				value: original,
+				content: originalText,
+				manifest: textManifest(originalText, originalText),
+			},
+			candidates: [
+				...(strategy === 'hybrid'
+					? [
+							{
+								name: 'semantic',
+								value: optimized,
+								content: optimizedText,
+								manifest: textManifest(originalText, optimizedText),
+								eligible: !semanticCandidateRejectedReason,
+								rejectionReason: semanticCandidateRejectedReason,
+							},
+						]
+					: []),
+				{
+					name: 'deterministic',
+					value: deterministicCandidate,
+					content: deterministicText,
+					manifest: textManifest(originalText, deterministicText),
+					eligible: Boolean(deterministicText.trim()),
+					rejectionReason: 'empty_result',
+				},
+			],
+			protectedValues: facts.map((fact) => fact.value),
+			level: options.qualityLevel ?? 'strict',
 			compressorTokens,
+			verificationTokens,
 			minimumNetSavingsTokens: profile.minimumNetSavingsTokens,
 		});
-		if (!net.useOptimized) {
+		warnings.push(...fallback.warnings);
+		if (fallback.selected.name === 'original') {
+			if (strategy === 'hybrid') {
+				semanticFallbackUsed = true;
+				semanticMethods.length = 0;
+			}
+			const lastWarning = fallback.warnings[fallback.warnings.length - 1] ?? '';
+			const fallbackReason: FallbackReason = lastWarning.includes('protected-facts')
+				? 'protected_fact_missing'
+				: lastWarning.includes('token_budget_unmet')
+					? 'token_budget_unmet'
+					: lastWarning.includes('negative_net_savings') || lastWarning.includes('minimum_net')
+						? 'negative_net_savings'
+						: 'quality_guard_failed';
 			return createResult(original, original, profile, startedAt, {
 				strategy: 'fallback',
 				summaryModelUsed,
 				compressorTokens,
 				protectedFactsCount: facts.length,
-				warnings: [
-					...warnings,
-					`Optimization skipped because net savings would be ${net.netTokens} tokens.`,
-				],
-				fallbackReason: net.reason ?? 'negative_net_savings',
+				warnings,
+				fallbackReason,
+				semanticFallbackUsed,
+				verificationTokens,
 			});
+		}
+		optimized = fallback.selected.value;
+		if (fallback.selected.name === 'deterministic' && strategy === 'hybrid') {
+			strategy = 'deterministic';
+			semanticFallbackUsed = true;
+			semanticMethods.length = 0;
 		}
 
 		return createResult(original, optimized, profile, startedAt, {
@@ -340,6 +582,10 @@ export async function optimizeContext(
 			compressorTokens,
 			protectedFactsCount: facts.length,
 			warnings,
+			semanticMethods,
+			semanticFallbackUsed,
+			semanticConfidence,
+			verificationTokens,
 		});
 	} catch (error) {
 		const reason: FallbackReason = summaryAdapter ? 'summary_error' : 'internal_error';

@@ -87,20 +87,61 @@ describe('content optimization', () => {
 	});
 
 	it('fails quality when a protected value disappears', () => {
-		const quality = checkContentQuality(
-			'Pedido ORD-8172 em 21/07/2026',
-			'Pedido sem referência',
-			{
-				contentType: 'text',
-				originalHash: 'hash',
-				originalBytes: 10,
-				optimizedBytes: 5,
-				format: 'text',
-			},
-		);
+		const quality = checkContentQuality('Pedido ORD-8172 em 21/07/2026', 'Pedido sem referência', {
+			contentType: 'text',
+			originalHash: 'hash',
+			originalBytes: 10,
+			optimizedBytes: 5,
+			format: 'text',
+		});
 
 		expect(quality.passed).toBe(false);
 		expect(quality.fallbackUsed).toBe(true);
+	});
+
+	it('strict quality rejects a changed negation even when exact values remain', () => {
+		const manifest = {
+			contentType: 'text' as const,
+			originalHash: 'hash',
+			originalBytes: 40,
+			optimizedBytes: 35,
+			format: 'text' as const,
+		};
+		const strict = checkContentQuality(
+			'Pedido ORD-8172 não foi autorizado.',
+			'Pedido ORD-8172 foi autorizado.',
+			manifest,
+			undefined,
+			'strict',
+		);
+		const fast = checkContentQuality(
+			'Pedido ORD-8172 não foi autorizado.',
+			'Pedido ORD-8172 foi autorizado.',
+			manifest,
+			undefined,
+			'fast',
+		);
+		expect(strict.passed).toBe(false);
+		expect(strict.warnings).toContain('fact-polarity');
+		expect(fast.passed).toBe(true);
+	});
+
+	it('critical quality preserves quoted values exactly', () => {
+		const quality = checkContentQuality(
+			'Use o status "aguardando expansão".',
+			'Use o status aguardando expansão.',
+			{
+				contentType: 'text',
+				originalHash: 'hash',
+				originalBytes: 40,
+				optimizedBytes: 36,
+				format: 'text',
+			},
+			undefined,
+			'critical',
+		);
+		expect(quality.passed).toBe(false);
+		expect(quality.warnings).toContain('quoted-values');
 	});
 
 	it('never rewrites code or removes YAML document separators', () => {

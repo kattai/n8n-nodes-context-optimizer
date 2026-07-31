@@ -91,6 +91,32 @@ describe('FileSystemMemoryManager', () => {
 		);
 	});
 
+	it('rejects summaries that omit required exact values or exceed the token budget', async () => {
+		const memory = await manager();
+		const valid = await memory.updateSession({
+			sessionKey: 'chat-summary-guard',
+			scope: 'workflow-a',
+			summaryCandidate: 'Pedido ORD-991 continua pendente.',
+			summaryRequiredValues: ['ORD-991'],
+		});
+		const missing = await memory.updateSession({
+			sessionKey: 'chat-summary-guard',
+			scope: 'workflow-a',
+			summaryCandidate: 'Pedido continua pendente.',
+			summaryRequiredValues: ['ORD-991'],
+		});
+		const oversized = await memory.updateSession({
+			sessionKey: 'chat-summary-guard',
+			scope: 'workflow-a',
+			summaryCandidate: 'contexto '.repeat(600),
+			summaryMaximumTokens: 100,
+		});
+
+		expect(missing.warnings).toContain('summary_rejected_missing_required_value');
+		expect(oversized.warnings).toContain('summary_rejected_oversize');
+		expect(oversized.session.incrementalSummary?.text).toBe(valid.session.incrementalSummary?.text);
+	});
+
 	it('isolates equal session keys by scope', async () => {
 		const memory = await manager();
 		await memory.updateSession({
