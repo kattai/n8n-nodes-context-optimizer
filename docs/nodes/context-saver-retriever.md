@@ -27,6 +27,12 @@ The Agent requests only a path, filtered record set, relevant chunk, section, sc
 - BM25 search with neighboring chunks.
 - Schema, section, bounded fragment, cursor pagination, per-call and per-execution budgets.
 
+## Tool call defaults
+
+When one Retriever is dedicated to a workflow-known resource, version 2 can define a default `Resource ID`, `Operation`, and `Path`. Defaults are used only when the model omits a field. Scope validation still applies.
+
+This avoids failing an entire Agent execution when a provider emits an empty or partial tool call. Invalid calls without usable defaults return a compact `invalid_tool_input` result so the Agent can retry instead of crashing the workflow.
+
 ## Example Agent instruction
 
 ```text

@@ -62,6 +62,13 @@ const operations = [
 	'inspect_schema',
 	'get_original_fragment',
 ] as const;
+type RetrievalOperation = (typeof operations)[number];
+
+export interface ToolRequestDefaults {
+	resourceId?: string;
+	operation?: RetrievalOperation;
+	path?: string;
+}
 const requestSchema = z.discriminatedUnion('operation', [
 	z.object({
 		operation: z.literal('search_context'),
@@ -139,8 +146,17 @@ const toolInputSchema = z.object({
 	end: z.number().int().positive().optional().describe('Fragment end character'),
 });
 
-export function normalizeToolRequest(value: unknown): RetrievalRequest {
-	const input = toolInputSchema.parse(value);
+export function normalizeToolRequest(
+	value: unknown,
+	defaults: ToolRequestDefaults = {},
+): RetrievalRequest {
+	const parsed = toolInputSchema.parse(value);
+	const input = {
+		...parsed,
+		...(parsed.resourceId || !defaults.resourceId ? {} : { resourceId: defaults.resourceId }),
+		...(parsed.operation || !defaults.operation ? {} : { operation: defaults.operation }),
+		...(parsed.path || !defaults.path ? {} : { path: defaults.path }),
+	};
 	const operation =
 		input.operation ??
 		(input.start !== undefined || input.end !== undefined
@@ -155,6 +171,35 @@ export function normalizeToolRequest(value: unknown): RetrievalRequest {
 							? 'get_exact_value'
 							: 'inspect_schema');
 	return requestSchema.parse({ ...input, operation }) as RetrievalRequest;
+}
+
+function invalidToolInput(error: unknown): string {
+	const detail = error instanceof Error ? error.message : String(error);
+	return JSON.stringify({
+		ok: false,
+		exact: false,
+		error: {
+			code: 'invalid_tool_input',
+			message:
+				'Invalid retrieval arguments. Provide resourceId and the fields required by the operation, then retry.',
+			detail,
+		},
+	});
+}
+
+function toolRequestDefaults(value: unknown): ToolRequestDefaults {
+	if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+	const raw = value as Record<string, unknown>;
+	const resourceId = String(raw.resourceId ?? '').trim();
+	const operation = operations.includes(raw.operation as RetrievalOperation)
+		? (raw.operation as RetrievalOperation)
+		: undefined;
+	const defaultPath = String(raw.path ?? '').trim();
+	return {
+		...(resourceId ? { resourceId } : {}),
+		...(operation ? { operation } : {}),
+		...(defaultPath ? { path: defaultPath } : {}),
+	};
 }
 
 interface ExecutionRetrievalState extends RetrievalBudgetState {
@@ -223,6 +268,51 @@ export class ContextRetrieverTool implements INodeType {
 				default: '',
 				placeholder: defaultStorageDirectory(),
 				description: 'Self-hosted path; must match the Store or Content Virtualization directory',
+			},
+			{
+				displayName: 'Tool Call Defaults',
+				name: 'toolCallDefaults',
+				type: 'collection',
+				placeholder: 'Add Default',
+				default: {},
+				displayOptions: { show: { '@version': [2] } },
+				description:
+					'Optional workflow-known values used only when the model omits them; useful for a Retriever dedicated to one stored resource',
+				options: [
+					{
+						displayName: 'Operation',
+						name: 'operation',
+						type: 'options',
+						noDataExpression: true,
+						options: [
+							{ name: 'Filter Records', value: 'filter_records' },
+							{ name: 'Get Exact Value', value: 'get_exact_value' },
+							{ name: 'Get Original Fragment', value: 'get_original_fragment' },
+							{ name: 'Get Section', value: 'get_section' },
+							{ name: 'Inspect Schema', value: 'inspect_schema' },
+							{ name: 'Search Context', value: 'search_context' },
+						],
+						default: 'get_exact_value',
+						description: 'Used only when the model does not provide an operation',
+					},
+					{
+						displayName: 'Path',
+						name: 'path',
+						type: 'string',
+						default: '',
+						placeholder: 'records[80].amount',
+						description: 'Used only when the model does not provide a path',
+					},
+					{
+						displayName: 'Resource ID',
+						name: 'resourceId',
+						type: 'string',
+						default: '',
+						placeholder: '={{ $json.contextResource.resourceId }}',
+						description:
+							'Used only when the model omits resourceId; the resource must still belong to this Scope',
+					},
+				],
 			},
 			{
 				displayName: 'Maximum Results',
@@ -299,6 +389,7 @@ export class ContextRetrieverTool implements INodeType {
 			allowFullOriginal: this.getNodeParameter('allowFullOriginal', 0, false) as boolean,
 		};
 		const store = new FileSystemResourceStore(directory.trim() || defaultStorageDirectory());
+		const defaults = toolRequestDefaults(this.getNodeParameter('toolCallDefaults', 0, {}));
 		const returnData: INodeExecutionData[] = [];
 		for (let itemIndex = 0; itemIndex < items.length; itemIndex++) {
 			try {
@@ -308,7 +399,12 @@ export class ContextRetrieverTool implements INodeType {
 					description: this.getNodeParameter('toolDescription', itemIndex) as string,
 					schema: langChainSchema,
 					func: async (input) => {
-						const request = normalizeToolRequest(input);
+						let request: RetrievalRequest;
+						try {
+							request = normalizeToolRequest(input, defaults);
+						} catch (error) {
+							return invalidToolInput(error);
+						}
 						const state = nextExecutionState(this.getExecutionId(), this.getNode().name);
 						const result: RetrievalResult =
 							state.count > maximumCalls
@@ -362,6 +458,7 @@ export class ContextRetrieverTool implements INodeType {
 			allowFullOriginal: this.getNodeParameter('allowFullOriginal', itemIndex, false) as boolean,
 		};
 		const store = new FileSystemResourceStore(directory.trim() || defaultStorageDirectory());
+		const defaults = toolRequestDefaults(this.getNodeParameter('toolCallDefaults', itemIndex, {}));
 		let callCount = 0;
 		const budgetState: RetrievalBudgetState = { tokensUsed: 0 };
 		const langChainSchema = toolInputSchema as unknown as z.ZodType<unknown>;
@@ -370,7 +467,12 @@ export class ContextRetrieverTool implements INodeType {
 			description: this.getNodeParameter('toolDescription', itemIndex) as string,
 			schema: langChainSchema,
 			func: async (input) => {
-				const request = normalizeToolRequest(input);
+				let request: RetrievalRequest;
+				try {
+					request = normalizeToolRequest(input, defaults);
+				} catch (error) {
+					return invalidToolInput(error);
+				}
 				callCount++;
 				const trace = this.addInputData(NodeConnectionTypes.AiTool, [
 					[

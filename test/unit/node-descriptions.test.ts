@@ -189,6 +189,30 @@ describe('Token Saver node descriptions', () => {
 		});
 	});
 
+	it('fills workflow-known retrieval defaults when a provider sends empty arguments', () => {
+		expect(
+			normalizeToolRequest(
+				{},
+				{
+					resourceId: 'ctx_test',
+					operation: 'get_exact_value',
+					path: 'records[80]',
+				},
+			),
+		).toEqual({
+			operation: 'get_exact_value',
+			resourceId: 'ctx_test',
+			path: 'records[80]',
+		});
+	});
+
+	it('exposes optional Retriever defaults only in version 2', () => {
+		expect(property(new ContextRetrieverTool(), 'toolCallDefaults')).toMatchObject({
+			type: 'collection',
+			displayOptions: { show: { '@version': [2] } },
+		});
+	});
+
 	it('keeps an explicit retrieval operation when the provider supplies it', () => {
 		expect(
 			normalizeToolRequest({
