@@ -1,3 +1,14 @@
+# Benchmarks do Context Saver
+
+## Resultado atual — 0.7.0
+
+- [Perfis v2](profile-v2-results.md): 12 casos determinísticos por perfil em JSON/API, RAG e logs.
+- Medianas no conteúdo elegível: **Quality 25,11%**, **Balanced 59,73%**, **Savings 80,33%**.
+- Integridade: fatos, JSON round-trip, recuperação exata e tool IDs em **100%**.
+- Comando reproduzível: `npm run benchmark:profiles`.
+
+As porcentagens descrevem o corpus elegível, não garantem economia fixa na requisição completa.
+
 # Comparação local — agente com prompt de 12K
 
 ## Resultado atual — 0.6.0

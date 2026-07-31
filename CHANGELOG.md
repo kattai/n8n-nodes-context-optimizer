@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.7.0 — 2026-07-31
+
+- Rename the public suite to Context Saver while preserving technical node identifiers and v1 workflow compatibility.
+- Add v2 Quality, Balanced, Savings, and Custom profile contracts with explicit eligible-savings ranges.
+- Add canonical context, active tool-sequence preservation, model-aware token counting, net-savings guards, and negative-optimization fallback.
+- Add reversible recursive JSON packing, content-addressed resource reuse, SHA-256 receipts, task-aware previews, paged exact retrieval, and evidence paths.
+- Separate eligible, full-request, provider, and net measurements with actionable recommendations.
+- Add distinct background-free light/dark icons, per-node documentation, v2 example workflows, and a deterministic profile benchmark.
+
 ## 0.6.0 — 2026-07-30
 
 - Add provider-neutral cache-aware strategies: Automatic Hybrid, Cache Priority, Token Reduction Priority, and legacy Ignore Cache Signals.

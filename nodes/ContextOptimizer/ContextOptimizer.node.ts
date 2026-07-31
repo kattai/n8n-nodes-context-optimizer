@@ -10,6 +10,7 @@ import { optimizeContent } from '../../src/content/optimize-content';
 import type { ContentOptimizationOptions, ContentType } from '../../src/content/types';
 import { optimizeContext } from '../../src/core/optimizer';
 import { estimateTokens } from '../../src/core/token-estimator';
+import { resolvePreviewPolicy } from '../../src/policy/preview-policy';
 import type {
 	CustomProfileConfig,
 	OptimizerProfileName,
@@ -779,11 +780,13 @@ export class ContextOptimizer implements INodeType {
 							itemIndex,
 							{},
 						) as VirtualizationNodeOptions;
+						const eligibleTokens = estimateTokens(result.optimizedContent);
+						const previewPolicy = resolvePreviewPolicy(profile, eligibleTokens);
 						const thresholdTokens =
 							virtualizationMode === 'required'
 								? 0
-								: (virtualizationOptions.thresholdTokens ?? 2000);
-						if (estimateTokens(result.optimizedContent) > thresholdTokens) {
+								: (virtualizationOptions.thresholdTokens ?? previewPolicy.thresholdTokens);
+						if (eligibleTokens > thresholdTokens) {
 							try {
 								const store = new FileSystemResourceStore(
 									virtualizationOptions.storageDirectory?.trim() || defaultStorageDirectory(),
@@ -804,8 +807,9 @@ export class ContextOptimizer implements INodeType {
 									resource.resourceId,
 									{
 										thresholdTokens,
-										maxPreviewTokens: virtualizationOptions.maxPreviewTokens ?? 1500,
-										maxItems: virtualizationOptions.maxItems ?? 20,
+										maxPreviewTokens:
+											virtualizationOptions.maxPreviewTokens ?? previewPolicy.maxPreviewTokens,
+										maxItems: virtualizationOptions.maxItems ?? previewPolicy.maxItems,
 										currentTask: options.currentTask,
 										recordCount: result.manifest.recordCount,
 										fields: result.manifest.fields,

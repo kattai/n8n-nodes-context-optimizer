@@ -1,0 +1,1282 @@
+{
+  "benchmark": "Context Saver v2 deterministic profile benchmark",
+  "version": "0.7.0",
+  "generatedFor": "2026-07-31 release",
+  "dataset": {
+    "casesPerProfile": 12,
+    "contentTypes": [
+      "json",
+      "rag",
+      "logs"
+    ],
+    "providerCalls": 0,
+    "note": "Percentages apply to eligible deterministic corpus, not every complete model request."
+  },
+  "thresholds": {
+    "quality": 15,
+    "balanced": 35,
+    "savings": 60
+  },
+  "summary": {
+    "quality": {
+      "cases": 12,
+      "medianEligibleSavingsPercent": 25.11,
+      "medianFullRequestSavingsPercent": 21.88,
+      "medianNetSavingsPercent": 25.11,
+      "qualityIntegrityPercent": 100,
+      "inlineTargetEvidencePercent": 100,
+      "roundTripPercent": 100,
+      "retrievalIntegrityPercent": 100,
+      "toolSequenceIntegrityPercent": 100
+    },
+    "balanced": {
+      "cases": 12,
+      "medianEligibleSavingsPercent": 59.73,
+      "medianFullRequestSavingsPercent": 52.06,
+      "medianNetSavingsPercent": 57.05,
+      "qualityIntegrityPercent": 100,
+      "inlineTargetEvidencePercent": 100,
+      "roundTripPercent": 100,
+      "retrievalIntegrityPercent": 100,
+      "toolSequenceIntegrityPercent": 100
+    },
+    "savings": {
+      "cases": 12,
+      "medianEligibleSavingsPercent": 80.33,
+      "medianFullRequestSavingsPercent": 70.54,
+      "medianNetSavingsPercent": 78.26,
+      "qualityIntegrityPercent": 100,
+      "inlineTargetEvidencePercent": 100,
+      "roundTripPercent": 100,
+      "retrievalIntegrityPercent": 100,
+      "toolSequenceIntegrityPercent": 100
+    }
+  },
+  "passed": true,
+  "cases": [
+    {
+      "profile": "quality",
+      "case": "json-1",
+      "contentType": "json",
+      "eligible": {
+        "before": 9105,
+        "after": 5025,
+        "saved": 4080,
+        "percent": 44.81
+      },
+      "fullRequest": {
+        "before": 9705,
+        "after": 5625,
+        "saved": 4080,
+        "percent": 42.04
+      },
+      "net": {
+        "before": 9105,
+        "after": 5025,
+        "retrievalTokens": 0,
+        "saved": 4080,
+        "percent": 44.81
+      },
+      "provider": {
+        "available": false,
+        "reason": "Deterministic local benchmark; no paid provider call was made."
+      },
+      "qualityPassed": true,
+      "inlineTargetEvidencePassed": true,
+      "roundTripPassed": true,
+      "retrievalRequired": false,
+      "retrievalPassed": true,
+      "fallbackReason": null
+    },
+    {
+      "profile": "quality",
+      "case": "json-2",
+      "contentType": "json",
+      "eligible": {
+        "before": 9105,
+        "after": 5025,
+        "saved": 4080,
+        "percent": 44.81
+      },
+      "fullRequest": {
+        "before": 9705,
+        "after": 5625,
+        "saved": 4080,
+        "percent": 42.04
+      },
+      "net": {
+        "before": 9105,
+        "after": 5025,
+        "retrievalTokens": 0,
+        "saved": 4080,
+        "percent": 44.81
+      },
+      "provider": {
+        "available": false,
+        "reason": "Deterministic local benchmark; no paid provider call was made."
+      },
+      "qualityPassed": true,
+      "inlineTargetEvidencePassed": true,
+      "roundTripPassed": true,
+      "retrievalRequired": false,
+      "retrievalPassed": true,
+      "fallbackReason": null
+    },
+    {
+      "profile": "quality",
+      "case": "json-3",
+      "contentType": "json",
+      "eligible": {
+        "before": 9105,
+        "after": 5025,
+        "saved": 4080,
+        "percent": 44.81
+      },
+      "fullRequest": {
+        "before": 9705,
+        "after": 5625,
+        "saved": 4080,
+        "percent": 42.04
+      },
+      "net": {
+        "before": 9105,
+        "after": 5025,
+        "retrievalTokens": 0,
+        "saved": 4080,
+        "percent": 44.81
+      },
+      "provider": {
+        "available": false,
+        "reason": "Deterministic local benchmark; no paid provider call was made."
+      },
+      "qualityPassed": true,
+      "inlineTargetEvidencePassed": true,
+      "roundTripPassed": true,
+      "retrievalRequired": false,
+      "retrievalPassed": true,
+      "fallbackReason": null
+    },
+    {
+      "profile": "quality",
+      "case": "json-4",
+      "contentType": "json",
+      "eligible": {
+        "before": 9105,
+        "after": 5025,
+        "saved": 4080,
+        "percent": 44.81
+      },
+      "fullRequest": {
+        "before": 9705,
+        "after": 5625,
+        "saved": 4080,
+        "percent": 42.04
+      },
+      "net": {
+        "before": 9105,
+        "after": 5025,
+        "retrievalTokens": 0,
+        "saved": 4080,
+        "percent": 44.81
+      },
+      "provider": {
+        "available": false,
+        "reason": "Deterministic local benchmark; no paid provider call was made."
+      },
+      "qualityPassed": true,
+      "inlineTargetEvidencePassed": true,
+      "roundTripPassed": true,
+      "retrievalRequired": false,
+      "retrievalPassed": true,
+      "fallbackReason": null
+    },
+    {
+      "profile": "quality",
+      "case": "rag-1",
+      "contentType": "rag",
+      "eligible": {
+        "before": 4070,
+        "after": 3048,
+        "saved": 1022,
+        "percent": 25.11
+      },
+      "fullRequest": {
+        "before": 4670,
+        "after": 3648,
+        "saved": 1022,
+        "percent": 21.88
+      },
+      "net": {
+        "before": 4070,
+        "after": 3048,
+        "retrievalTokens": 0,
+        "saved": 1022,
+        "percent": 25.11
+      },
+      "provider": {
+        "available": false,
+        "reason": "Deterministic local benchmark; no paid provider call was made."
+      },
+      "qualityPassed": true,
+      "inlineTargetEvidencePassed": true,
+      "roundTripPassed": true,
+      "retrievalRequired": false,
+      "retrievalPassed": true,
+      "fallbackReason": null
+    },
+    {
+      "profile": "quality",
+      "case": "rag-2",
+      "contentType": "rag",
+      "eligible": {
+        "before": 4070,
+        "after": 3048,
+        "saved": 1022,
+        "percent": 25.11
+      },
+      "fullRequest": {
+        "before": 4670,
+        "after": 3648,
+        "saved": 1022,
+        "percent": 21.88
+      },
+      "net": {
+        "before": 4070,
+        "after": 3048,
+        "retrievalTokens": 0,
+        "saved": 1022,
+        "percent": 25.11
+      },
+      "provider": {
+        "available": false,
+        "reason": "Deterministic local benchmark; no paid provider call was made."
+      },
+      "qualityPassed": true,
+      "inlineTargetEvidencePassed": true,
+      "roundTripPassed": true,
+      "retrievalRequired": false,
+      "retrievalPassed": true,
+      "fallbackReason": null
+    },
+    {
+      "profile": "quality",
+      "case": "rag-3",
+      "contentType": "rag",
+      "eligible": {
+        "before": 4070,
+        "after": 3048,
+        "saved": 1022,
+        "percent": 25.11
+      },
+      "fullRequest": {
+        "before": 4670,
+        "after": 3648,
+        "saved": 1022,
+        "percent": 21.88
+      },
+      "net": {
+        "before": 4070,
+        "after": 3048,
+        "retrievalTokens": 0,
+        "saved": 1022,
+        "percent": 25.11
+      },
+      "provider": {
+        "available": false,
+        "reason": "Deterministic local benchmark; no paid provider call was made."
+      },
+      "qualityPassed": true,
+      "inlineTargetEvidencePassed": true,
+      "roundTripPassed": true,
+      "retrievalRequired": false,
+      "retrievalPassed": true,
+      "fallbackReason": null
+    },
+    {
+      "profile": "quality",
+      "case": "rag-4",
+      "contentType": "rag",
+      "eligible": {
+        "before": 4068,
+        "after": 3081,
+        "saved": 987,
+        "percent": 24.26
+      },
+      "fullRequest": {
+        "before": 4668,
+        "after": 3681,
+        "saved": 987,
+        "percent": 21.14
+      },
+      "net": {
+        "before": 4068,
+        "after": 3081,
+        "retrievalTokens": 0,
+        "saved": 987,
+        "percent": 24.26
+      },
+      "provider": {
+        "available": false,
+        "reason": "Deterministic local benchmark; no paid provider call was made."
+      },
+      "qualityPassed": true,
+      "inlineTargetEvidencePassed": true,
+      "roundTripPassed": true,
+      "retrievalRequired": false,
+      "retrievalPassed": true,
+      "fallbackReason": null
+    },
+    {
+      "profile": "quality",
+      "case": "logs-1",
+      "contentType": "logs",
+      "eligible": {
+        "before": 3549,
+        "after": 2778,
+        "saved": 771,
+        "percent": 21.72
+      },
+      "fullRequest": {
+        "before": 4149,
+        "after": 3378,
+        "saved": 771,
+        "percent": 18.58
+      },
+      "net": {
+        "before": 3549,
+        "after": 2778,
+        "retrievalTokens": 0,
+        "saved": 771,
+        "percent": 21.72
+      },
+      "provider": {
+        "available": false,
+        "reason": "Deterministic local benchmark; no paid provider call was made."
+      },
+      "qualityPassed": true,
+      "inlineTargetEvidencePassed": true,
+      "roundTripPassed": true,
+      "retrievalRequired": false,
+      "retrievalPassed": true,
+      "fallbackReason": null
+    },
+    {
+      "profile": "quality",
+      "case": "logs-2",
+      "contentType": "logs",
+      "eligible": {
+        "before": 3549,
+        "after": 2778,
+        "saved": 771,
+        "percent": 21.72
+      },
+      "fullRequest": {
+        "before": 4149,
+        "after": 3378,
+        "saved": 771,
+        "percent": 18.58
+      },
+      "net": {
+        "before": 3549,
+        "after": 2778,
+        "retrievalTokens": 0,
+        "saved": 771,
+        "percent": 21.72
+      },
+      "provider": {
+        "available": false,
+        "reason": "Deterministic local benchmark; no paid provider call was made."
+      },
+      "qualityPassed": true,
+      "inlineTargetEvidencePassed": true,
+      "roundTripPassed": true,
+      "retrievalRequired": false,
+      "retrievalPassed": true,
+      "fallbackReason": null
+    },
+    {
+      "profile": "quality",
+      "case": "logs-3",
+      "contentType": "logs",
+      "eligible": {
+        "before": 3549,
+        "after": 2778,
+        "saved": 771,
+        "percent": 21.72
+      },
+      "fullRequest": {
+        "before": 4149,
+        "after": 3378,
+        "saved": 771,
+        "percent": 18.58
+      },
+      "net": {
+        "before": 3549,
+        "after": 2778,
+        "retrievalTokens": 0,
+        "saved": 771,
+        "percent": 21.72
+      },
+      "provider": {
+        "available": false,
+        "reason": "Deterministic local benchmark; no paid provider call was made."
+      },
+      "qualityPassed": true,
+      "inlineTargetEvidencePassed": true,
+      "roundTripPassed": true,
+      "retrievalRequired": false,
+      "retrievalPassed": true,
+      "fallbackReason": null
+    },
+    {
+      "profile": "quality",
+      "case": "logs-4",
+      "contentType": "logs",
+      "eligible": {
+        "before": 3549,
+        "after": 2778,
+        "saved": 771,
+        "percent": 21.72
+      },
+      "fullRequest": {
+        "before": 4149,
+        "after": 3378,
+        "saved": 771,
+        "percent": 18.58
+      },
+      "net": {
+        "before": 3549,
+        "after": 2778,
+        "retrievalTokens": 0,
+        "saved": 771,
+        "percent": 21.72
+      },
+      "provider": {
+        "available": false,
+        "reason": "Deterministic local benchmark; no paid provider call was made."
+      },
+      "qualityPassed": true,
+      "inlineTargetEvidencePassed": true,
+      "roundTripPassed": true,
+      "retrievalRequired": false,
+      "retrievalPassed": true,
+      "fallbackReason": null
+    },
+    {
+      "profile": "balanced",
+      "case": "json-1",
+      "contentType": "json",
+      "eligible": {
+        "before": 9105,
+        "after": 1449,
+        "saved": 7656,
+        "percent": 84.09
+      },
+      "fullRequest": {
+        "before": 9705,
+        "after": 2049,
+        "saved": 7656,
+        "percent": 78.89
+      },
+      "net": {
+        "before": 9105,
+        "after": 1540,
+        "retrievalTokens": 91,
+        "saved": 7565,
+        "percent": 83.09
+      },
+      "provider": {
+        "available": false,
+        "reason": "Deterministic local benchmark; no paid provider call was made."
+      },
+      "qualityPassed": true,
+      "inlineTargetEvidencePassed": true,
+      "roundTripPassed": true,
+      "retrievalRequired": true,
+      "retrievalPassed": true,
+      "fallbackReason": null
+    },
+    {
+      "profile": "balanced",
+      "case": "json-2",
+      "contentType": "json",
+      "eligible": {
+        "before": 9105,
+        "after": 1449,
+        "saved": 7656,
+        "percent": 84.09
+      },
+      "fullRequest": {
+        "before": 9705,
+        "after": 2049,
+        "saved": 7656,
+        "percent": 78.89
+      },
+      "net": {
+        "before": 9105,
+        "after": 1540,
+        "retrievalTokens": 91,
+        "saved": 7565,
+        "percent": 83.09
+      },
+      "provider": {
+        "available": false,
+        "reason": "Deterministic local benchmark; no paid provider call was made."
+      },
+      "qualityPassed": true,
+      "inlineTargetEvidencePassed": true,
+      "roundTripPassed": true,
+      "retrievalRequired": true,
+      "retrievalPassed": true,
+      "fallbackReason": null
+    },
+    {
+      "profile": "balanced",
+      "case": "json-3",
+      "contentType": "json",
+      "eligible": {
+        "before": 9105,
+        "after": 1449,
+        "saved": 7656,
+        "percent": 84.09
+      },
+      "fullRequest": {
+        "before": 9705,
+        "after": 2049,
+        "saved": 7656,
+        "percent": 78.89
+      },
+      "net": {
+        "before": 9105,
+        "after": 1540,
+        "retrievalTokens": 91,
+        "saved": 7565,
+        "percent": 83.09
+      },
+      "provider": {
+        "available": false,
+        "reason": "Deterministic local benchmark; no paid provider call was made."
+      },
+      "qualityPassed": true,
+      "inlineTargetEvidencePassed": true,
+      "roundTripPassed": true,
+      "retrievalRequired": true,
+      "retrievalPassed": true,
+      "fallbackReason": null
+    },
+    {
+      "profile": "balanced",
+      "case": "json-4",
+      "contentType": "json",
+      "eligible": {
+        "before": 9105,
+        "after": 1449,
+        "saved": 7656,
+        "percent": 84.09
+      },
+      "fullRequest": {
+        "before": 9705,
+        "after": 2049,
+        "saved": 7656,
+        "percent": 78.89
+      },
+      "net": {
+        "before": 9105,
+        "after": 1540,
+        "retrievalTokens": 91,
+        "saved": 7565,
+        "percent": 83.09
+      },
+      "provider": {
+        "available": false,
+        "reason": "Deterministic local benchmark; no paid provider call was made."
+      },
+      "qualityPassed": true,
+      "inlineTargetEvidencePassed": true,
+      "roundTripPassed": true,
+      "retrievalRequired": true,
+      "retrievalPassed": true,
+      "fallbackReason": null
+    },
+    {
+      "profile": "balanced",
+      "case": "rag-1",
+      "contentType": "rag",
+      "eligible": {
+        "before": 4070,
+        "after": 1639,
+        "saved": 2431,
+        "percent": 59.73
+      },
+      "fullRequest": {
+        "before": 4670,
+        "after": 2239,
+        "saved": 2431,
+        "percent": 52.06
+      },
+      "net": {
+        "before": 4070,
+        "after": 1748,
+        "retrievalTokens": 109,
+        "saved": 2322,
+        "percent": 57.05
+      },
+      "provider": {
+        "available": false,
+        "reason": "Deterministic local benchmark; no paid provider call was made."
+      },
+      "qualityPassed": true,
+      "inlineTargetEvidencePassed": true,
+      "roundTripPassed": true,
+      "retrievalRequired": true,
+      "retrievalPassed": true,
+      "fallbackReason": null
+    },
+    {
+      "profile": "balanced",
+      "case": "rag-2",
+      "contentType": "rag",
+      "eligible": {
+        "before": 4070,
+        "after": 1639,
+        "saved": 2431,
+        "percent": 59.73
+      },
+      "fullRequest": {
+        "before": 4670,
+        "after": 2239,
+        "saved": 2431,
+        "percent": 52.06
+      },
+      "net": {
+        "before": 4070,
+        "after": 1748,
+        "retrievalTokens": 109,
+        "saved": 2322,
+        "percent": 57.05
+      },
+      "provider": {
+        "available": false,
+        "reason": "Deterministic local benchmark; no paid provider call was made."
+      },
+      "qualityPassed": true,
+      "inlineTargetEvidencePassed": true,
+      "roundTripPassed": true,
+      "retrievalRequired": true,
+      "retrievalPassed": true,
+      "fallbackReason": null
+    },
+    {
+      "profile": "balanced",
+      "case": "rag-3",
+      "contentType": "rag",
+      "eligible": {
+        "before": 4070,
+        "after": 1639,
+        "saved": 2431,
+        "percent": 59.73
+      },
+      "fullRequest": {
+        "before": 4670,
+        "after": 2239,
+        "saved": 2431,
+        "percent": 52.06
+      },
+      "net": {
+        "before": 4070,
+        "after": 1748,
+        "retrievalTokens": 109,
+        "saved": 2322,
+        "percent": 57.05
+      },
+      "provider": {
+        "available": false,
+        "reason": "Deterministic local benchmark; no paid provider call was made."
+      },
+      "qualityPassed": true,
+      "inlineTargetEvidencePassed": true,
+      "roundTripPassed": true,
+      "retrievalRequired": true,
+      "retrievalPassed": true,
+      "fallbackReason": null
+    },
+    {
+      "profile": "balanced",
+      "case": "rag-4",
+      "contentType": "rag",
+      "eligible": {
+        "before": 4068,
+        "after": 1690,
+        "saved": 2378,
+        "percent": 58.46
+      },
+      "fullRequest": {
+        "before": 4668,
+        "after": 2290,
+        "saved": 2378,
+        "percent": 50.94
+      },
+      "net": {
+        "before": 4068,
+        "after": 1799,
+        "retrievalTokens": 109,
+        "saved": 2269,
+        "percent": 55.78
+      },
+      "provider": {
+        "available": false,
+        "reason": "Deterministic local benchmark; no paid provider call was made."
+      },
+      "qualityPassed": true,
+      "inlineTargetEvidencePassed": true,
+      "roundTripPassed": true,
+      "retrievalRequired": true,
+      "retrievalPassed": true,
+      "fallbackReason": null
+    },
+    {
+      "profile": "balanced",
+      "case": "logs-1",
+      "contentType": "logs",
+      "eligible": {
+        "before": 3549,
+        "after": 1469,
+        "saved": 2080,
+        "percent": 58.61
+      },
+      "fullRequest": {
+        "before": 4149,
+        "after": 2069,
+        "saved": 2080,
+        "percent": 50.13
+      },
+      "net": {
+        "before": 3549,
+        "after": 1614,
+        "retrievalTokens": 145,
+        "saved": 1935,
+        "percent": 54.52
+      },
+      "provider": {
+        "available": false,
+        "reason": "Deterministic local benchmark; no paid provider call was made."
+      },
+      "qualityPassed": true,
+      "inlineTargetEvidencePassed": true,
+      "roundTripPassed": true,
+      "retrievalRequired": true,
+      "retrievalPassed": true,
+      "fallbackReason": null
+    },
+    {
+      "profile": "balanced",
+      "case": "logs-2",
+      "contentType": "logs",
+      "eligible": {
+        "before": 3549,
+        "after": 1469,
+        "saved": 2080,
+        "percent": 58.61
+      },
+      "fullRequest": {
+        "before": 4149,
+        "after": 2069,
+        "saved": 2080,
+        "percent": 50.13
+      },
+      "net": {
+        "before": 3549,
+        "after": 1614,
+        "retrievalTokens": 145,
+        "saved": 1935,
+        "percent": 54.52
+      },
+      "provider": {
+        "available": false,
+        "reason": "Deterministic local benchmark; no paid provider call was made."
+      },
+      "qualityPassed": true,
+      "inlineTargetEvidencePassed": true,
+      "roundTripPassed": true,
+      "retrievalRequired": true,
+      "retrievalPassed": true,
+      "fallbackReason": null
+    },
+    {
+      "profile": "balanced",
+      "case": "logs-3",
+      "contentType": "logs",
+      "eligible": {
+        "before": 3549,
+        "after": 1469,
+        "saved": 2080,
+        "percent": 58.61
+      },
+      "fullRequest": {
+        "before": 4149,
+        "after": 2069,
+        "saved": 2080,
+        "percent": 50.13
+      },
+      "net": {
+        "before": 3549,
+        "after": 1614,
+        "retrievalTokens": 145,
+        "saved": 1935,
+        "percent": 54.52
+      },
+      "provider": {
+        "available": false,
+        "reason": "Deterministic local benchmark; no paid provider call was made."
+      },
+      "qualityPassed": true,
+      "inlineTargetEvidencePassed": true,
+      "roundTripPassed": true,
+      "retrievalRequired": true,
+      "retrievalPassed": true,
+      "fallbackReason": null
+    },
+    {
+      "profile": "balanced",
+      "case": "logs-4",
+      "contentType": "logs",
+      "eligible": {
+        "before": 3549,
+        "after": 1469,
+        "saved": 2080,
+        "percent": 58.61
+      },
+      "fullRequest": {
+        "before": 4149,
+        "after": 2069,
+        "saved": 2080,
+        "percent": 50.13
+      },
+      "net": {
+        "before": 3549,
+        "after": 1614,
+        "retrievalTokens": 145,
+        "saved": 1935,
+        "percent": 54.52
+      },
+      "provider": {
+        "available": false,
+        "reason": "Deterministic local benchmark; no paid provider call was made."
+      },
+      "qualityPassed": true,
+      "inlineTargetEvidencePassed": true,
+      "roundTripPassed": true,
+      "retrievalRequired": true,
+      "retrievalPassed": true,
+      "fallbackReason": null
+    },
+    {
+      "profile": "savings",
+      "case": "json-1",
+      "contentType": "json",
+      "eligible": {
+        "before": 9105,
+        "after": 1814,
+        "saved": 7291,
+        "percent": 80.08
+      },
+      "fullRequest": {
+        "before": 9705,
+        "after": 2414,
+        "saved": 7291,
+        "percent": 75.13
+      },
+      "net": {
+        "before": 9105,
+        "after": 1905,
+        "retrievalTokens": 91,
+        "saved": 7200,
+        "percent": 79.08
+      },
+      "provider": {
+        "available": false,
+        "reason": "Deterministic local benchmark; no paid provider call was made."
+      },
+      "qualityPassed": true,
+      "inlineTargetEvidencePassed": true,
+      "roundTripPassed": true,
+      "retrievalRequired": true,
+      "retrievalPassed": true,
+      "fallbackReason": null
+    },
+    {
+      "profile": "savings",
+      "case": "json-2",
+      "contentType": "json",
+      "eligible": {
+        "before": 9105,
+        "after": 1814,
+        "saved": 7291,
+        "percent": 80.08
+      },
+      "fullRequest": {
+        "before": 9705,
+        "after": 2414,
+        "saved": 7291,
+        "percent": 75.13
+      },
+      "net": {
+        "before": 9105,
+        "after": 1905,
+        "retrievalTokens": 91,
+        "saved": 7200,
+        "percent": 79.08
+      },
+      "provider": {
+        "available": false,
+        "reason": "Deterministic local benchmark; no paid provider call was made."
+      },
+      "qualityPassed": true,
+      "inlineTargetEvidencePassed": true,
+      "roundTripPassed": true,
+      "retrievalRequired": true,
+      "retrievalPassed": true,
+      "fallbackReason": null
+    },
+    {
+      "profile": "savings",
+      "case": "json-3",
+      "contentType": "json",
+      "eligible": {
+        "before": 9105,
+        "after": 1814,
+        "saved": 7291,
+        "percent": 80.08
+      },
+      "fullRequest": {
+        "before": 9705,
+        "after": 2414,
+        "saved": 7291,
+        "percent": 75.13
+      },
+      "net": {
+        "before": 9105,
+        "after": 1905,
+        "retrievalTokens": 91,
+        "saved": 7200,
+        "percent": 79.08
+      },
+      "provider": {
+        "available": false,
+        "reason": "Deterministic local benchmark; no paid provider call was made."
+      },
+      "qualityPassed": true,
+      "inlineTargetEvidencePassed": true,
+      "roundTripPassed": true,
+      "retrievalRequired": true,
+      "retrievalPassed": true,
+      "fallbackReason": null
+    },
+    {
+      "profile": "savings",
+      "case": "json-4",
+      "contentType": "json",
+      "eligible": {
+        "before": 9105,
+        "after": 1814,
+        "saved": 7291,
+        "percent": 80.08
+      },
+      "fullRequest": {
+        "before": 9705,
+        "after": 2414,
+        "saved": 7291,
+        "percent": 75.13
+      },
+      "net": {
+        "before": 9105,
+        "after": 1905,
+        "retrievalTokens": 91,
+        "saved": 7200,
+        "percent": 79.08
+      },
+      "provider": {
+        "available": false,
+        "reason": "Deterministic local benchmark; no paid provider call was made."
+      },
+      "qualityPassed": true,
+      "inlineTargetEvidencePassed": true,
+      "roundTripPassed": true,
+      "retrievalRequired": true,
+      "retrievalPassed": true,
+      "fallbackReason": null
+    },
+    {
+      "profile": "savings",
+      "case": "rag-1",
+      "contentType": "rag",
+      "eligible": {
+        "before": 4070,
+        "after": 776,
+        "saved": 3294,
+        "percent": 80.93
+      },
+      "fullRequest": {
+        "before": 4670,
+        "after": 1376,
+        "saved": 3294,
+        "percent": 70.54
+      },
+      "net": {
+        "before": 4070,
+        "after": 885,
+        "retrievalTokens": 109,
+        "saved": 3185,
+        "percent": 78.26
+      },
+      "provider": {
+        "available": false,
+        "reason": "Deterministic local benchmark; no paid provider call was made."
+      },
+      "qualityPassed": true,
+      "inlineTargetEvidencePassed": true,
+      "roundTripPassed": true,
+      "retrievalRequired": true,
+      "retrievalPassed": true,
+      "fallbackReason": null
+    },
+    {
+      "profile": "savings",
+      "case": "rag-2",
+      "contentType": "rag",
+      "eligible": {
+        "before": 4070,
+        "after": 776,
+        "saved": 3294,
+        "percent": 80.93
+      },
+      "fullRequest": {
+        "before": 4670,
+        "after": 1376,
+        "saved": 3294,
+        "percent": 70.54
+      },
+      "net": {
+        "before": 4070,
+        "after": 885,
+        "retrievalTokens": 109,
+        "saved": 3185,
+        "percent": 78.26
+      },
+      "provider": {
+        "available": false,
+        "reason": "Deterministic local benchmark; no paid provider call was made."
+      },
+      "qualityPassed": true,
+      "inlineTargetEvidencePassed": true,
+      "roundTripPassed": true,
+      "retrievalRequired": true,
+      "retrievalPassed": true,
+      "fallbackReason": null
+    },
+    {
+      "profile": "savings",
+      "case": "rag-3",
+      "contentType": "rag",
+      "eligible": {
+        "before": 4070,
+        "after": 776,
+        "saved": 3294,
+        "percent": 80.93
+      },
+      "fullRequest": {
+        "before": 4670,
+        "after": 1376,
+        "saved": 3294,
+        "percent": 70.54
+      },
+      "net": {
+        "before": 4070,
+        "after": 885,
+        "retrievalTokens": 109,
+        "saved": 3185,
+        "percent": 78.26
+      },
+      "provider": {
+        "available": false,
+        "reason": "Deterministic local benchmark; no paid provider call was made."
+      },
+      "qualityPassed": true,
+      "inlineTargetEvidencePassed": true,
+      "roundTripPassed": true,
+      "retrievalRequired": true,
+      "retrievalPassed": true,
+      "fallbackReason": null
+    },
+    {
+      "profile": "savings",
+      "case": "rag-4",
+      "contentType": "rag",
+      "eligible": {
+        "before": 4068,
+        "after": 776,
+        "saved": 3292,
+        "percent": 80.92
+      },
+      "fullRequest": {
+        "before": 4668,
+        "after": 1376,
+        "saved": 3292,
+        "percent": 70.52
+      },
+      "net": {
+        "before": 4068,
+        "after": 885,
+        "retrievalTokens": 109,
+        "saved": 3183,
+        "percent": 78.24
+      },
+      "provider": {
+        "available": false,
+        "reason": "Deterministic local benchmark; no paid provider call was made."
+      },
+      "qualityPassed": true,
+      "inlineTargetEvidencePassed": true,
+      "roundTripPassed": true,
+      "retrievalRequired": true,
+      "retrievalPassed": true,
+      "fallbackReason": null
+    },
+    {
+      "profile": "savings",
+      "case": "logs-1",
+      "contentType": "logs",
+      "eligible": {
+        "before": 3549,
+        "after": 698,
+        "saved": 2851,
+        "percent": 80.33
+      },
+      "fullRequest": {
+        "before": 4149,
+        "after": 1298,
+        "saved": 2851,
+        "percent": 68.72
+      },
+      "net": {
+        "before": 3549,
+        "after": 843,
+        "retrievalTokens": 145,
+        "saved": 2706,
+        "percent": 76.25
+      },
+      "provider": {
+        "available": false,
+        "reason": "Deterministic local benchmark; no paid provider call was made."
+      },
+      "qualityPassed": true,
+      "inlineTargetEvidencePassed": true,
+      "roundTripPassed": true,
+      "retrievalRequired": true,
+      "retrievalPassed": true,
+      "fallbackReason": null
+    },
+    {
+      "profile": "savings",
+      "case": "logs-2",
+      "contentType": "logs",
+      "eligible": {
+        "before": 3549,
+        "after": 698,
+        "saved": 2851,
+        "percent": 80.33
+      },
+      "fullRequest": {
+        "before": 4149,
+        "after": 1298,
+        "saved": 2851,
+        "percent": 68.72
+      },
+      "net": {
+        "before": 3549,
+        "after": 843,
+        "retrievalTokens": 145,
+        "saved": 2706,
+        "percent": 76.25
+      },
+      "provider": {
+        "available": false,
+        "reason": "Deterministic local benchmark; no paid provider call was made."
+      },
+      "qualityPassed": true,
+      "inlineTargetEvidencePassed": true,
+      "roundTripPassed": true,
+      "retrievalRequired": true,
+      "retrievalPassed": true,
+      "fallbackReason": null
+    },
+    {
+      "profile": "savings",
+      "case": "logs-3",
+      "contentType": "logs",
+      "eligible": {
+        "before": 3549,
+        "after": 698,
+        "saved": 2851,
+        "percent": 80.33
+      },
+      "fullRequest": {
+        "before": 4149,
+        "after": 1298,
+        "saved": 2851,
+        "percent": 68.72
+      },
+      "net": {
+        "before": 3549,
+        "after": 843,
+        "retrievalTokens": 145,
+        "saved": 2706,
+        "percent": 76.25
+      },
+      "provider": {
+        "available": false,
+        "reason": "Deterministic local benchmark; no paid provider call was made."
+      },
+      "qualityPassed": true,
+      "inlineTargetEvidencePassed": true,
+      "roundTripPassed": true,
+      "retrievalRequired": true,
+      "retrievalPassed": true,
+      "fallbackReason": null
+    },
+    {
+      "profile": "savings",
+      "case": "logs-4",
+      "contentType": "logs",
+      "eligible": {
+        "before": 3549,
+        "after": 698,
+        "saved": 2851,
+        "percent": 80.33
+      },
+      "fullRequest": {
+        "before": 4149,
+        "after": 1298,
+        "saved": 2851,
+        "percent": 68.72
+      },
+      "net": {
+        "before": 3549,
+        "after": 843,
+        "retrievalTokens": 145,
+        "saved": 2706,
+        "percent": 76.25
+      },
+      "provider": {
+        "available": false,
+        "reason": "Deterministic local benchmark; no paid provider call was made."
+      },
+      "qualityPassed": true,
+      "inlineTargetEvidencePassed": true,
+      "roundTripPassed": true,
+      "retrievalRequired": true,
+      "retrievalPassed": true,
+      "fallbackReason": null
+    }
+  ]
+}
