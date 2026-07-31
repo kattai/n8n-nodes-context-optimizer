@@ -1,3 +1,5 @@
+import type { CanonicalContext } from '../context/types';
+
 export type OptimizerProfileName = 'safe' | 'balanced' | 'aggressive' | 'custom';
 
 export interface CustomProfileConfig {
@@ -81,6 +83,7 @@ export interface OptimizeContextResult {
 	currentMessage: string;
 	optimizedContext: string;
 	optimization: OptimizationMetrics;
+	canonicalContext?: CanonicalContext;
 }
 
 export interface ProtectedFact {
