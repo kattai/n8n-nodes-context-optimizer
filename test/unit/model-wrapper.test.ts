@@ -322,7 +322,7 @@ describe('wrapLanguageModel', () => {
 		expect(optimized[0]).toBe(messages[0]);
 		expect(optimized[1]).toBe(messages[1]);
 		expect(optimized[2].tool_call_id).toBe('call-1');
-		expect(optimized[2].content).toContain('@json-table');
+		expect(optimized[2].content).toMatch(/^@json-(?:table|pack-v2)/);
 		expect(optimized[2].content).toContain('ORDER-79');
 		expect(starts[0]).toMatchObject({
 			bypassReason: 'tool_sequence_content_only',
@@ -497,7 +497,7 @@ describe('wrapLanguageModel', () => {
 		}
 	});
 
-	it('falls back to structural compression when exact retrieval is unavailable', async () => {
+	it('uses reversible structural compression when retrieval is unavailable', async () => {
 		const model = new FakeModel();
 		const starts: Array<Record<string, unknown>> = [];
 		const content = JSON.stringify(
@@ -530,14 +530,14 @@ describe('wrapLanguageModel', () => {
 		]);
 
 		const optimized = model.lastInput as Array<{ content: string }>;
-		expect(optimized[2].content).toContain('@json-table');
+		expect(optimized[2].content).toMatch(/^@json-(?:table|pack-v2)/);
 		expect(optimized[2].content).not.toContain('<context-resource');
 		expect(starts[0]).toMatchObject({
 			retrievalRequired: false,
-			targetBandReached: false,
-			targetNotReachedReason: 'retriever_not_connected',
-			storageFallbackUsed: true,
+			targetBandReached: true,
+			storageFallbackUsed: false,
 		});
+		expect(starts[0]).not.toHaveProperty('targetNotReachedReason');
 	});
 
 	it('does not store secret-like tool results without explicit opt-in', async () => {

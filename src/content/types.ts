@@ -21,6 +21,10 @@ export interface ContentOptimizationOptions {
 	excludeFields?: string[];
 	removeNulls?: boolean;
 	removeEmptyStrings?: boolean;
+	includeJsonPaths?: string[];
+	excludeJsonPaths?: string[];
+	protectedJsonPaths?: string[];
+	dictionaryEncoding?: boolean;
 }
 
 export interface ContentManifest {
@@ -30,7 +34,8 @@ export interface ContentManifest {
 	optimizedBytes: number;
 	recordCount?: number;
 	fields?: string[];
-	format?: 'text' | 'json' | 'json-table' | 'logs' | 'html-text';
+	format?: 'text' | 'json' | 'json-table' | 'json-pack-v2' | 'logs' | 'html-text';
+	roundTripVerified?: boolean;
 }
 
 export interface QualityCheck {
@@ -71,4 +76,5 @@ export interface CompressorResult {
 	recordCount?: number;
 	fields?: string[];
 	format: NonNullable<ContentManifest['format']>;
+	roundTripVerified?: boolean;
 }

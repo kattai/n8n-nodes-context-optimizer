@@ -1,17 +1,18 @@
 import { extractProtectedFacts } from '../core/protected-facts';
 import { extractProtectedBlocks } from '../content/protected-blocks';
-import type {
-	ContentManifest,
-	ContentQuality,
-	QualityCheck,
-} from '../content/types';
+import type { ContentManifest, ContentQuality, QualityCheck } from '../content/types';
+import { unpackJsonV2 } from '../content/json-roundtrip';
 
 function unique(values: string[]): string[] {
 	return [...new Set(values.filter(Boolean))];
 }
 
 function customValues(values: string[] | string | undefined): string[] {
-	if (Array.isArray(values)) return values.map(String).map((value) => value.trim()).filter(Boolean);
+	if (Array.isArray(values))
+		return values
+			.map(String)
+			.map((value) => value.trim())
+			.filter(Boolean);
 	return String(values ?? '')
 		.split(/\r?\n/)
 		.map((value) => value.trim())
@@ -88,6 +89,18 @@ export function checkContentQuality(
 		checks.push({
 			name: 'reversible-json-table',
 			passed: validJsonTable(optimized, manifest.recordCount),
+		});
+	}
+	if (manifest.format === 'json-pack-v2') {
+		let valid = true;
+		try {
+			unpackJsonV2(optimized);
+		} catch {
+			valid = false;
+		}
+		checks.push({
+			name: 'reversible-json-pack-v2',
+			passed: valid && manifest.roundTripVerified === true,
 		});
 	}
 

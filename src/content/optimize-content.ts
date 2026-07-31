@@ -53,8 +53,7 @@ function tokenMetrics(original: string, optimized: string) {
 		original: originalTokens,
 		optimized: optimizedTokens,
 		saved,
-		savingsPercent:
-			originalTokens === 0 ? 0 : Number(((saved / originalTokens) * 100).toFixed(2)),
+		savingsPercent: originalTokens === 0 ? 0 : Number(((saved / originalTokens) * 100).toFixed(2)),
 		areEstimated: true as const,
 	};
 }
@@ -82,6 +81,7 @@ export function optimizeContent(
 		recordCount: compressed.recordCount,
 		fields: compressed.fields,
 		format: compressed.format,
+		roundTripVerified: compressed.roundTripVerified,
 	};
 	const quality = checkContentQuality(
 		contentType === 'html' ? removeHtmlBoilerplate(content) : content,
@@ -93,8 +93,7 @@ export function optimizeContent(
 	const noPositiveSavings =
 		!compressed.strategies.includes('preserve-code') &&
 		compressedTokens.optimized >= compressedTokens.original;
-	const optimizedContent =
-		quality.passed && !noPositiveSavings ? compressed.content : content;
+	const optimizedContent = quality.passed && !noPositiveSavings ? compressed.content : content;
 	const finalQuality = noPositiveSavings
 		? {
 				...quality,
@@ -107,9 +106,7 @@ export function optimizeContent(
 		optimizedContent,
 		contentType,
 		strategies:
-			quality.passed && !noPositiveSavings
-				? compressed.strategies
-				: ['fallback-original'],
+			quality.passed && !noPositiveSavings ? compressed.strategies : ['fallback-original'],
 		tokens: tokenMetrics(content, optimizedContent),
 		quality: finalQuality,
 		manifest: {
