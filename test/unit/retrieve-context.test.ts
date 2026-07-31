@@ -117,6 +117,7 @@ describe('retrieveContext', () => {
 			contentType: 'json',
 			ttlSeconds: 3600,
 			scope: 'workflow-1',
+			allowSecretLikeContent: true,
 		});
 		const nestedPolicy = { ...policy, blockedFields: ['password'] };
 
@@ -164,6 +165,7 @@ describe('retrieveContext', () => {
 			contentType: 'json',
 			ttlSeconds: 3600,
 			scope: 'workflow-1',
+			allowSecretLikeContent: true,
 		});
 		const nestedPolicy = { ...policy, blockedFields: ['password'] };
 

@@ -39,7 +39,8 @@ export class ContextStore implements INodeType {
 		group: ['transform'],
 		version: 1,
 		subtitle: '={{$parameter["operation"]}}',
-		description: 'Keep large original data outside the AI prompt so Token Saver Retriever can recover exact details',
+		description:
+			'Keep large original data outside the AI prompt so Token Saver Retriever can recover exact details',
 		defaults: { name: 'Token Saver Store' },
 		inputs: [NodeConnectionTypes.Main],
 		outputs: [NodeConnectionTypes.Main],
@@ -59,7 +60,8 @@ export class ContextStore implements INodeType {
 					{
 						name: 'Inspect Resource',
 						value: 'inspect',
-						description: 'Check type, expiry, fields, and record count without loading the original',
+						description:
+							'Check type, expiry, fields, and record count without loading the original',
 						action: 'Inspect a resource',
 					},
 					{
@@ -155,7 +157,8 @@ export class ContextStore implements INodeType {
 				type: 'string',
 				default: '',
 				placeholder: defaultStorageDirectory(),
-				description: 'Self-hosted storage path; empty uses the n8n user folder and must match the Retriever',
+				description:
+					'Self-hosted storage path; empty uses the n8n user folder and must match the Retriever',
 			},
 			{
 				displayName: 'Maximum Resource Size (MB)',
@@ -165,6 +168,15 @@ export class ContextStore implements INodeType {
 				default: 10,
 				displayOptions: { show: { operation: ['store'] } },
 				description: 'Reject a larger uncompressed resource instead of filling local storage',
+			},
+			{
+				displayName: 'Allow Secret-Like Content',
+				name: 'allowSecretLikeContent',
+				type: 'boolean',
+				default: false,
+				displayOptions: { show: { operation: ['store'] } },
+				description:
+					'Whether to store content that resembles API keys, passwords, or authorization headers; disabled by default',
 			},
 			{
 				displayName: 'Output',
@@ -197,10 +209,7 @@ export class ContextStore implements INodeType {
 
 		for (let itemIndex = 0; itemIndex < items.length; itemIndex++) {
 			try {
-				const operation = this.getNodeParameter(
-					'operation',
-					itemIndex,
-				) as ContextStoreOperation;
+				const operation = this.getNodeParameter('operation', itemIndex) as ContextStoreOperation;
 				const outputDetail = this.getNodeParameter(
 					'outputDetail',
 					itemIndex,
@@ -231,52 +240,35 @@ export class ContextStore implements INodeType {
 							itemIndex,
 							'text',
 						) as DetectedContentType,
-						ttlSeconds:
-							(this.getNodeParameter('ttlHours', itemIndex, 24) as number) * 3600,
+						ttlSeconds: (this.getNodeParameter('ttlHours', itemIndex, 24) as number) * 3600,
 						scope: this.getNodeParameter('scope', itemIndex, this.getWorkflow().id) as string,
 						fields: list(this.getNodeParameter('fields', itemIndex, '') as string),
 						...(recordCount > 0 ? { recordCount } : {}),
+						allowSecretLikeContent: this.getNodeParameter(
+							'allowSecretLikeContent',
+							itemIndex,
+							false,
+						) as boolean,
 					});
 					result = storeReceipt(manifest) as IDataObject;
 					if (outputDetail === 'detailed') {
 						result.resource = manifest as unknown as IDataObject;
 					}
 				} else if (operation === 'inspect') {
+					const scope = this.getNodeParameter('scope', itemIndex, this.getWorkflow().id) as string;
 					const manifest = await store.inspect(
 						this.getNodeParameter('resourceId', itemIndex) as string,
+						scope,
 					);
-					const scope = this.getNodeParameter(
-						'scope',
-						itemIndex,
-						this.getWorkflow().id,
-					) as string;
-					if (manifest.scope !== scope) {
-						throw new NodeOperationError(
-							this.getNode(),
-							'Resource belongs to a different scope',
-							{ itemIndex },
-						);
-					}
 					result = inspectReceipt(manifest) as IDataObject;
 					if (outputDetail === 'detailed') {
 						result.resource = manifest as unknown as IDataObject;
 					}
 				} else if (operation === 'delete') {
 					const resourceId = this.getNodeParameter('resourceId', itemIndex) as string;
-					const manifest = await store.inspect(resourceId);
-					const scope = this.getNodeParameter(
-						'scope',
-						itemIndex,
-						this.getWorkflow().id,
-					) as string;
-					if (manifest.scope !== scope) {
-						throw new NodeOperationError(
-							this.getNode(),
-							'Resource belongs to a different scope',
-							{ itemIndex },
-						);
-					}
-					result = { resourceId, deleted: await store.delete(resourceId) };
+					const scope = this.getNodeParameter('scope', itemIndex, this.getWorkflow().id) as string;
+					await store.inspect(resourceId, scope);
+					result = { resourceId, deleted: await store.delete(resourceId, scope) };
 				} else {
 					result = { purged: await store.purgeExpired() };
 				}

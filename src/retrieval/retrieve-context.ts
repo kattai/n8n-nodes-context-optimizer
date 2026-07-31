@@ -1,6 +1,7 @@
 /* eslint-disable @n8n/community-nodes/require-node-api-error -- Retrieval core has no n8n execution context; the tool adapter returns structured errors. */
 import { estimateTokens } from '../core/token-estimator';
 import type { ResourceStore, StoredResource } from '../storage/types';
+import { ResourceScopeError } from '../storage/filesystem-store';
 
 export type RetrievalOperation =
 	| 'search_context'
@@ -120,10 +121,7 @@ function enforceField(path: string, policy: RetrievalPolicy): void {
 	const blocked = policyFields(policy.blockedFields);
 	const blockedField = fields.find((field) => blocked.has(normalize(field)));
 	if (blockedField) {
-		throw new RetrievalPolicyError(
-			'field_not_allowed',
-			`Field is not allowed: ${blockedField}`,
-		);
+		throw new RetrievalPolicyError('field_not_allowed', `Field is not allowed: ${blockedField}`);
 	}
 	const leaf = fields[fields.length - 1];
 	if (leaf && policy.allowedFields.length > 0 && !fieldAllowed(leaf, policy)) {
@@ -192,10 +190,7 @@ function sanitizeValue(
 	};
 }
 
-function capResult(
-	result: RetrievalResult,
-	policy: RetrievalPolicy,
-): RetrievalResult {
+function capResult(result: RetrievalResult, policy: RetrievalPolicy): RetrievalResult {
 	const serialized = JSON.stringify(result.data ?? null);
 	const tokens = estimateTokens(serialized);
 	if (tokens <= policy.maxTokens) {
@@ -237,18 +232,13 @@ function recordsAtPath(content: string, path = ''): unknown[] {
 	return value;
 }
 
-function selectFields(
-	record: unknown,
-	fields: string[],
-	policy: RetrievalPolicy,
-): SanitizedValue {
+function selectFields(record: unknown, fields: string[], policy: RetrievalPolicy): SanitizedValue {
 	if (!record || typeof record !== 'object' || Array.isArray(record)) {
 		return sanitizeValue(record, policy);
 	}
 	const source = record as Record<string, unknown>;
 	if (fields.length === 0) return sanitizeValue(source, policy);
-	const selected =
-		fields.length > 0 ? fields : Object.keys(source);
+	const selected = fields.length > 0 ? fields : Object.keys(source);
 	const value: Record<string, unknown> = {};
 	let redacted = false;
 	for (const field of selected) {
@@ -314,22 +304,18 @@ function searchChunks(
 	}
 	return {
 		results: chunks
-		.map((chunk) => ({
-			...chunk,
-			score: score(JSON.stringify(chunk.content), terms),
-		}))
-		.filter((chunk) => terms.length === 0 || chunk.score > 0)
-		.sort((left, right) => right.score - left.score)
-		.slice(0, limit),
+			.map((chunk) => ({
+				...chunk,
+				score: score(JSON.stringify(chunk.content), terms),
+			}))
+			.filter((chunk) => terms.length === 0 || chunk.score > 0)
+			.sort((left, right) => right.score - left.score)
+			.slice(0, limit),
 		redacted,
 	};
 }
 
-function resultError(
-	request: RetrievalRequest,
-	code: string,
-	message: string,
-): RetrievalResult {
+function resultError(request: RetrievalRequest, code: string, message: string): RetrievalResult {
 	return {
 		ok: false,
 		operation: request.operation,
@@ -345,14 +331,11 @@ export async function retrieveContext(
 	policy: RetrievalPolicy,
 ): Promise<RetrievalResult> {
 	try {
-		const resource = await store.read(request.resourceId);
+		const resource = await store.read(request.resourceId, policy.scope);
 		if (resource.manifest.scope !== policy.scope) {
 			return resultError(request, 'scope_mismatch', 'Resource belongs to a different scope');
 		}
-		const limit = Math.max(
-			1,
-			Math.min(request.limit ?? policy.maxResults, policy.maxResults),
-		);
+		const limit = Math.max(1, Math.min(request.limit ?? policy.maxResults, policy.maxResults));
 		let result: RetrievalResult;
 
 		if (request.operation === 'inspect_schema') {
@@ -380,9 +363,7 @@ export async function retrieveContext(
 			if (value === undefined) {
 				return resultError(request, 'path_not_found', `Path not found: ${path}`);
 			}
-			const pathFields = parsePath(path).filter(
-				(part): part is string => typeof part === 'string',
-			);
+			const pathFields = parsePath(path).filter((part): part is string => typeof part === 'string');
 			const selectedField = pathFields[pathFields.length - 1];
 			const selectedFieldAllowed =
 				policy.allowedFields.length === 0 ||
@@ -491,9 +472,11 @@ export async function retrieveContext(
 			request,
 			error instanceof RetrievalPolicyError
 				? error.code
-				: error instanceof Error
-					? error.name
-					: 'retrieval_error',
+				: error instanceof ResourceScopeError
+					? 'scope_mismatch'
+					: error instanceof Error
+						? error.name
+						: 'retrieval_error',
 			error instanceof Error ? error.message : String(error),
 		);
 	}

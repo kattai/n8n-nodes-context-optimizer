@@ -4,6 +4,7 @@ import { estimateTokens } from '../core/token-estimator';
 import { retrieveContext } from '../retrieval/retrieve-context';
 import type { ResourceStore } from '../storage/types';
 import { virtualizeContext } from '../virtualization/context-virtualizer';
+import { containsSecretLikeContent } from '../security/secret-detector';
 
 export type MaximumSavingsFallbackReason =
 	| 'content_below_threshold'
@@ -54,15 +55,6 @@ function looksBinary(content: string): boolean {
 		return code < 32 && code !== 9 && code !== 10 && code !== 13;
 	}).length;
 	return controls / sample.length > 0.02;
-}
-
-export function containsSecretLikeContent(content: string): boolean {
-	return [
-		/-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/i,
-		/\bBearer\s+[A-Za-z0-9._~+/=-]{16,}/i,
-		/\b(?:sk|pk)_(?:live|test)_[A-Za-z0-9]{12,}/i,
-		/["'](?:password|passwd|api[_-]?key|access[_-]?token|refresh[_-]?token|client[_-]?secret|authorization)["']\s*:\s*["'][^"']{6,}["']/i,
-	].some((pattern) => pattern.test(content));
 }
 
 function eligibleType(content: string): DetectedContentType | undefined {
@@ -149,13 +141,13 @@ export async function virtualizeMaximumSavingsToolResult(input: {
 			fields: structural.manifest.fields,
 		});
 		resourceId = manifest.resourceId;
-		const stored = await options.store.read(resourceId);
+		const stored = await options.store.read(resourceId, options.scope);
 		if (stored.content !== originalContent || stored.manifest.scope !== options.scope) {
-			await options.store.delete(resourceId).catch(() => undefined);
+			await options.store.delete(resourceId, options.scope).catch(() => undefined);
 			return structuralResult(structural, 'integrity_check_failed', true);
 		}
 		if (!(await verifyRetrieval(options.store, resourceId, options.scope))) {
-			await options.store.delete(resourceId).catch(() => undefined);
+			await options.store.delete(resourceId, options.scope).catch(() => undefined);
 			return structuralResult(structural, 'retrieval_check_failed', true);
 		}
 
@@ -164,20 +156,15 @@ export async function virtualizeMaximumSavingsToolResult(input: {
 			Math.min(Math.max(options.maxPreviewRatio, 0.05), 0.3),
 		);
 		const maximumPreviewTokens = Math.max(100, Math.floor(originalTokens * targetRatio));
-		const virtualized = virtualizeContext(
-			structural.optimizedContent,
-			contentType,
-			resourceId,
-			{
-				thresholdTokens: 0,
-				maxPreviewTokens: maximumPreviewTokens,
-				maxItems: 1000,
-				currentTask,
-				recordCount: structural.manifest.recordCount,
-				fields: structural.manifest.fields,
-				sourceTokens: originalTokens,
-			},
-		);
+		const virtualized = virtualizeContext(structural.optimizedContent, contentType, resourceId, {
+			thresholdTokens: 0,
+			maxPreviewTokens: maximumPreviewTokens,
+			maxItems: 1000,
+			currentTask,
+			recordCount: structural.manifest.recordCount,
+			fields: structural.manifest.fields,
+			sourceTokens: originalTokens,
+		});
 		const maximumAllowed = Math.floor(
 			originalTokens * Math.min(Math.max(options.maxPreviewRatio, 0.05), 0.3),
 		);
@@ -186,7 +173,7 @@ export async function virtualizeMaximumSavingsToolResult(input: {
 			virtualized.previewTokens >= structural.tokens.optimized ||
 			virtualized.previewTokens > maximumAllowed
 		) {
-			await options.store.delete(resourceId).catch(() => undefined);
+			await options.store.delete(resourceId, options.scope).catch(() => undefined);
 			return structuralResult(structural, 'preview_budget_failed', true);
 		}
 
@@ -203,7 +190,7 @@ export async function virtualizeMaximumSavingsToolResult(input: {
 		};
 	} catch {
 		if (resourceId && options.store) {
-			await options.store.delete(resourceId).catch(() => undefined);
+			await options.store.delete(resourceId, options.scope).catch(() => undefined);
 		}
 		return structuralResult(structural, 'storage_error', true);
 	}

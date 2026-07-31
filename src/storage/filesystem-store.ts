@@ -7,12 +7,8 @@ import { promisify } from 'node:util';
 import { gunzip, gzip } from 'node:zlib';
 import { estimateTokens } from '../core/token-estimator';
 import { createResourceId, assertResourceId } from './resource-id';
-import type {
-	ResourceManifest,
-	ResourceStore,
-	StoredResource,
-	StoreResourceInput,
-} from './types';
+import type { ResourceManifest, ResourceStore, StoredResource, StoreResourceInput } from './types';
+import { containsSecretLikeContent } from '../security/secret-detector';
 
 const gzipAsync = promisify(gzip);
 const gunzipAsync = promisify(gunzip);
@@ -38,9 +34,15 @@ export class ResourceIntegrityError extends Error {
 	}
 }
 
+export class ResourceScopeError extends Error {
+	constructor(resourceId: string) {
+		super(`Resource belongs to a different scope: ${resourceId}`);
+		this.name = 'ResourceScopeError';
+	}
+}
+
 export function defaultStorageDirectory(): string {
-	const userFolder =
-		process.env.N8N_USER_FOLDER?.trim() || join(homedir(), '.n8n');
+	const userFolder = process.env.N8N_USER_FOLDER?.trim() || join(homedir(), '.n8n');
 	return join(userFolder, 'context-optimizer', 'resources');
 }
 
@@ -87,28 +89,55 @@ export class FileSystemResourceStore implements ResourceStore {
 	async store(input: StoreResourceInput): Promise<ResourceManifest> {
 		const bytes = Buffer.byteLength(input.content);
 		if (bytes > this.maxResourceBytes) {
-			throw new Error(
-				`Resource exceeds maximum size of ${this.maxResourceBytes} bytes`,
-			);
+			throw new Error(`Resource exceeds maximum size of ${this.maxResourceBytes} bytes`);
 		}
 		if (!Number.isFinite(input.ttlSeconds) || input.ttlSeconds <= 0) {
 			throw new Error('ttlSeconds must be greater than zero');
+		}
+		const secretLike = containsSecretLikeContent(input.content);
+		if (secretLike && !input.allowSecretLikeContent) {
+			throw new Error('Secret-like content is blocked by default');
 		}
 
 		const resourceId = createResourceId(input.content, input.scope);
 		const dataPath = this.path(resourceId, '.json.gz');
 		const manifestPath = this.path(resourceId, '.manifest.json');
 		const createdAt = new Date();
+		const originalHash = createHash('sha256').update(input.content).digest('hex');
+		const schemaHash = createHash('sha256')
+			.update(JSON.stringify({ fields: input.fields ?? [], recordCount: input.recordCount }))
+			.digest('hex');
+		let existingManifest: ResourceManifest | undefined;
+		if ((await exists(dataPath)) && (await exists(manifestPath))) {
+			try {
+				existingManifest = JSON.parse(await readFile(manifestPath, 'utf8')) as ResourceManifest;
+			} catch {
+				existingManifest = undefined;
+			}
+		}
+		const reused =
+			existingManifest?.originalHash === originalHash && existingManifest.scope === input.scope;
 		const manifest: ResourceManifest = {
-			storageVersion: 1,
+			storageVersion: 2,
 			resourceId,
 			contentType: input.contentType,
-			originalHash: createHash('sha256').update(input.content).digest('hex'),
+			originalHash,
 			originalBytes: bytes,
 			originalTokens: estimateTokens(input.content),
-			createdAt: createdAt.toISOString(),
+			createdAt: reused
+				? (existingManifest?.createdAt ?? createdAt.toISOString())
+				: createdAt.toISOString(),
+			lastAccessedAt: createdAt.toISOString(),
 			expiresAt: new Date(createdAt.getTime() + input.ttlSeconds * 1000).toISOString(),
 			scope: input.scope,
+			reuseCount: reused ? (existingManifest?.reuseCount ?? 0) + 1 : 0,
+			referenceCount: reused ? (existingManifest?.referenceCount ?? 1) + 1 : 1,
+			sensitivity: secretLike ? 'secret_like_allowed' : 'standard',
+			schemaHash,
+			index: {
+				fields: input.fields ?? [],
+				...(input.recordCount === undefined ? {} : { recordCount: input.recordCount }),
+			},
 			fields: input.fields,
 			recordCount: input.recordCount,
 		};
@@ -121,7 +150,7 @@ export class FileSystemResourceStore implements ResourceStore {
 		return manifest;
 	}
 
-	async inspect(resourceId: string): Promise<ResourceManifest> {
+	async inspect(resourceId: string, scope?: string): Promise<ResourceManifest> {
 		const path = this.path(resourceId, '.manifest.json');
 		let manifest: ResourceManifest;
 		try {
@@ -135,11 +164,14 @@ export class FileSystemResourceStore implements ResourceStore {
 		if (Date.parse(manifest.expiresAt) <= Date.now()) {
 			throw new ResourceExpiredError(resourceId);
 		}
+		if (scope !== undefined && manifest.scope !== scope) {
+			throw new ResourceScopeError(resourceId);
+		}
 		return manifest;
 	}
 
-	async read(resourceId: string): Promise<StoredResource> {
-		const manifest = await this.inspect(resourceId);
+	async read(resourceId: string, scope?: string): Promise<StoredResource> {
+		const manifest = await this.inspect(resourceId, scope);
 		const path = this.path(resourceId, '.json.gz');
 		try {
 			const compressed = await readFile(path);
@@ -148,7 +180,15 @@ export class FileSystemResourceStore implements ResourceStore {
 			if (hash !== manifest.originalHash) {
 				throw new ResourceIntegrityError(resourceId);
 			}
-			return { manifest, content };
+			const accessedManifest = {
+				...manifest,
+				lastAccessedAt: new Date().toISOString(),
+			};
+			await this.writeAtomic(
+				this.path(resourceId, '.manifest.json'),
+				`${JSON.stringify(accessedManifest, null, 2)}\n`,
+			);
+			return { manifest: accessedManifest, content };
 		} catch (error) {
 			if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
 				throw new ResourceNotFoundError(resourceId);
@@ -157,11 +197,9 @@ export class FileSystemResourceStore implements ResourceStore {
 		}
 	}
 
-	async delete(resourceId: string): Promise<boolean> {
-		const paths = [
-			this.path(resourceId, '.json.gz'),
-			this.path(resourceId, '.manifest.json'),
-		];
+	async delete(resourceId: string, scope?: string): Promise<boolean> {
+		if (scope !== undefined) await this.inspect(resourceId, scope);
+		const paths = [this.path(resourceId, '.json.gz'), this.path(resourceId, '.manifest.json')];
 		let deleted = false;
 		for (const path of paths) {
 			try {
