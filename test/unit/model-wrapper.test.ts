@@ -172,7 +172,7 @@ describe('wrapLanguageModel', () => {
 		expect(model.lastInput).toBe(messages);
 	});
 
-	it('bypasses optimization when LangChain stores tool calls in additional_kwargs', async () => {
+	it('preserves tool metadata stored in additional_kwargs without disabling optimization', async () => {
 		const model = new FakeModel();
 		const starts: unknown[] = [];
 		const wrapped = wrapLanguageModel(model, {
@@ -198,12 +198,60 @@ describe('wrapLanguageModel', () => {
 
 		await wrapped.invoke(messages);
 
-		expect(model.lastInput).toBe(messages);
+		expect(model.lastInput).toStrictEqual(messages);
 		expect(starts[0]).toMatchObject({
 			messagesBefore: 4,
 			messagesAfter: 4,
-			bypassReason: 'tool_sequence_present',
 		});
+		expect(starts[0]).not.toHaveProperty('bypassReason');
+	});
+
+	it('optimizes ordinary old history even when a completed tool sequence exists', async () => {
+		const model = new FakeModel();
+		const wrapped = wrapLanguageModel(model, {
+			profile: 'custom',
+			custom: { keepRecentMessages: 2, approximateDeduplication: false },
+		});
+		const messages = [
+			{ role: 'user', content: 'duplicated old context' },
+			{ role: 'assistant', content: 'acknowledged' },
+			{ role: 'user', content: 'duplicated old context' },
+			{ role: 'assistant', content: 'acknowledged' },
+			{ role: 'user', content: 'Search the order.' },
+			{ role: 'assistant', tool_calls: [{ id: 'call-1', name: 'orders' }] },
+			{ role: 'tool', tool_call_id: 'call-1', content: '{"id":1}' },
+			{ role: 'user', content: 'Continue.' },
+		];
+
+		await wrapped.invoke(messages);
+
+		const optimized = model.lastInput as typeof messages;
+		expect(optimized.length).toBeLessThan(messages.length);
+		expect(optimized.find((message) => message.tool_call_id === 'call-1')).toBeDefined();
+		expect(optimized.find((message) => message.tool_calls?.[0]?.id === 'call-1')).toBeDefined();
+		expect(optimized.at(-1)).toBe(messages.at(-1));
+	});
+
+	it('never compresses a result that belongs to an active parallel sequence', async () => {
+		const model = new FakeModel();
+		const partialResult = JSON.stringify(
+			Array.from({ length: 80 }, (_, index) => ({ id: index, status: 'open' })),
+		);
+		const messages = [
+			{ role: 'user', content: 'Compare.' },
+			{
+				role: 'assistant',
+				tool_calls: [
+					{ id: 'call-a', name: 'search_a' },
+					{ id: 'call-b', name: 'search_b' },
+				],
+			},
+			{ role: 'tool', tool_call_id: 'call-a', content: partialResult },
+		];
+
+		await wrapLanguageModel(model, { profile: 'aggressive' }).invoke(messages);
+
+		expect(model.lastInput).toStrictEqual(messages);
 	});
 
 	it('bypasses an invalid tool sequence without changing provider input', async () => {
@@ -281,9 +329,9 @@ describe('wrapLanguageModel', () => {
 			messagesBefore: 3,
 			messagesAfter: 3,
 		});
-		expect(
-			(starts[0] as { tokensAfterEstimated: number }).tokensAfterEstimated,
-		).toBeLessThan((starts[0] as { tokensBeforeEstimated: number }).tokensBeforeEstimated);
+		expect((starts[0] as { tokensAfterEstimated: number }).tokensAfterEstimated).toBeLessThan(
+			(starts[0] as { tokensBeforeEstimated: number }).tokensBeforeEstimated,
+		);
 	});
 
 	it('compresses text-block tool results emitted by current LangChain adapters', async () => {
@@ -470,7 +518,9 @@ describe('wrapLanguageModel', () => {
 				maxPreviewRatio: 0.3,
 				allowSecretLikeContent: false,
 			},
-			observer: { onStart: (metrics) => starts.push(metrics as unknown as Record<string, unknown>) },
+			observer: {
+				onStart: (metrics) => starts.push(metrics as unknown as Record<string, unknown>),
+			},
 		});
 
 		await wrapped.invoke([
@@ -507,7 +557,9 @@ describe('wrapLanguageModel', () => {
 					maxPreviewRatio: 0.3,
 					allowSecretLikeContent: false,
 				},
-				observer: { onStart: (metrics) => starts.push(metrics as unknown as Record<string, unknown>) },
+				observer: {
+					onStart: (metrics) => starts.push(metrics as unknown as Record<string, unknown>),
+				},
 			});
 			const content = JSON.stringify(
 				Array.from({ length: 80 }, (_, index) => ({

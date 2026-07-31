@@ -6,11 +6,7 @@ import { estimateTokens } from '../core/token-estimator';
 import type { OptimizeContextOptions } from '../core/types';
 import { extractProviderUsage } from '../analytics/provider-usage';
 import { decideCacheAction } from '../cache/policy-engine';
-import type {
-	CacheBlockKind,
-	CacheBlockVolatility,
-	CacheStrategy,
-} from '../cache/policy-types';
+import type { CacheBlockKind, CacheBlockVolatility, CacheStrategy } from '../cache/policy-types';
 import type { FingerprintRegistry } from '../cache/types';
 import {
 	type MaximumSavingsFallbackReason,
@@ -25,10 +21,7 @@ import {
 	type ToolSequenceIssue,
 } from './message-sequence';
 
-export type ModelBypassReason =
-	| 'tool_sequence_present'
-	| 'tool_sequence_content_only'
-	| ToolSequenceIssue;
+export type ModelBypassReason = 'tool_sequence_content_only' | ToolSequenceIssue;
 
 export interface LanguageModelLike {
 	invoke?: (input: unknown, ...args: unknown[]) => Promise<unknown>;
@@ -197,9 +190,7 @@ function toolPayloadText(value: unknown, depth = 0): string | undefined {
 			}
 		}
 		const parts = value.map((part) => toolPayloadText(part, depth + 1));
-		return parts.every((part): part is string => part !== undefined)
-			? parts.join('\n')
-			: undefined;
+		return parts.every((part): part is string => part !== undefined) ? parts.join('\n') : undefined;
 	}
 	if (!value || typeof value !== 'object') return undefined;
 	const record = value as Record<string, unknown>;
@@ -225,9 +216,9 @@ function optimizableToolText(message: MessageLike): string | undefined {
 }
 
 function taskText(messages: unknown[]): string {
-	const user = [...messages]
-		.reverse()
-		.find((raw) => messageRole(raw as MessageLike) === 'user') as MessageLike | undefined;
+	const user = [...messages].reverse().find((raw) => messageRole(raw as MessageLike) === 'user') as
+		| MessageLike
+		| undefined;
 	const toolCalls = messages
 		.map((raw) => raw as MessageLike)
 		.filter((message) => messageRole(message) === 'assistant')
@@ -305,9 +296,7 @@ async function applyCachePolicy(
 		const inCommonPrefix = entry.index < latestMessageIndex;
 		const kind = cacheBlockKind(entry, latestMessageIndex, recentWindowStart);
 		const mandatory = structurallyProtected.has(entry.index) || isUserCorrection(entry);
-		let fingerprint:
-			| { seenCount: number; lastProviderCachedTokens?: number }
-			| undefined;
+		let fingerprint: { seenCount: number; lastProviderCachedTokens?: number } | undefined;
 		if (inCommonPrefix && entry.text && cache.registry) {
 			try {
 				const observed = await cache.registry.observe({
@@ -340,11 +329,9 @@ async function applyCachePolicy(
 		if (selected.action === 'preserve') protectedIndexes.add(entry.index);
 		if (
 			selected.action === 'preserve' &&
-			[
-				'provider_cache_evidence',
-				'stable_repeated_prefix',
-				'large_common_prefix',
-			].includes(selected.reason)
+			['provider_cache_evidence', 'stable_repeated_prefix', 'large_common_prefix'].includes(
+				selected.reason,
+			)
 		) {
 			stablePrefixTokens += estimatedTokens;
 		}
@@ -387,14 +374,18 @@ function combineCacheMetrics(metrics: CacheOptimizationMetrics[]): CacheOptimiza
 }
 
 function combineToolMetrics(
-	metrics: Array<Pick<ModelOptimizationMetrics,
-		| 'eligibleTokensBefore'
-		| 'eligibleTokensAfter'
-		| 'virtualizedResourceIds'
-		| 'retrievalRequired'
-		| 'targetBandReached'
-		| 'targetNotReachedReason'
-		| 'storageFallbackUsed'>>,
+	metrics: Array<
+		Pick<
+			ModelOptimizationMetrics,
+			| 'eligibleTokensBefore'
+			| 'eligibleTokensAfter'
+			| 'virtualizedResourceIds'
+			| 'retrievalRequired'
+			| 'targetBandReached'
+			| 'targetNotReachedReason'
+			| 'storageFallbackUsed'
+		>
+	>,
 ): ToolOptimizationMetrics {
 	const combined = emptyToolMetrics();
 	for (const entry of metrics) {
@@ -404,7 +395,8 @@ function combineToolMetrics(
 		combined.retrievalRequired ||= entry.retrievalRequired;
 		combined.targetBandReached ||= entry.targetBandReached;
 		combined.storageFallbackUsed ||= entry.storageFallbackUsed;
-		if (entry.targetNotReachedReason) combined.targetNotReachedReason = entry.targetNotReachedReason;
+		if (entry.targetNotReachedReason)
+			combined.targetNotReachedReason = entry.targetNotReachedReason;
 	}
 	if (combined.eligibleTokensBefore > 0) {
 		combined.targetBandReached =
@@ -417,6 +409,7 @@ function combineToolMetrics(
 async function optimizeToolResults(
 	messages: unknown[],
 	options: LanguageModelWrapperOptions,
+	eligibleIndexes?: Set<number>,
 ): Promise<{ messages: unknown[]; changed: boolean; metrics: ToolOptimizationMetrics }> {
 	let changed = false;
 	const metrics = emptyToolMetrics(
@@ -426,9 +419,9 @@ async function optimizeToolResults(
 	);
 	const currentTask = taskText(messages);
 	const optimized: unknown[] = [];
-	for (const raw of messages) {
+	for (const [index, raw] of messages.entries()) {
 		const message = raw as MessageLike;
-		if (messageRole(message) !== 'tool') {
+		if (messageRole(message) !== 'tool' || (eligibleIndexes && !eligibleIndexes.has(index))) {
 			optimized.push(raw);
 			continue;
 		}
@@ -476,8 +469,7 @@ async function optimizeToolResults(
 		optimized.push(cloneWithContent(message, content));
 	}
 	if (metrics.eligibleTokensBefore > 0) {
-		metrics.targetBandReached =
-			metrics.eligibleTokensAfter <= metrics.eligibleTokensBefore * 0.3;
+		metrics.targetBandReached = metrics.eligibleTokensAfter <= metrics.eligibleTokensBefore * 0.3;
 		if (metrics.targetBandReached) delete metrics.targetNotReachedReason;
 	}
 	return { messages: changed ? optimized : messages, changed, metrics };
@@ -488,25 +480,19 @@ async function optimizeMessages(
 	options: LanguageModelWrapperOptions,
 ): Promise<OptimizedMessages> {
 	const toolSequence = analyzeToolSequence(messages);
-	if (toolSequence.hasToolData) {
-		if (toolSequence.valid) {
-			const optimized = await optimizeToolResults(messages, options);
-			return {
-				messages: optimized.messages,
-				bypassReason: optimized.changed
-					? 'tool_sequence_content_only'
-					: 'tool_sequence_present',
-				toolMetrics: optimized.metrics,
-			};
-		}
+	if (toolSequence.hasToolData && !toolSequence.valid) {
 		return {
 			messages,
 			bypassReason: toolSequence.issue,
 		};
 	}
+	const optimizedTools = toolSequence.hasToolData
+		? await optimizeToolResults(messages, options, new Set(toolSequence.completedResultIndexes))
+		: { messages, changed: false, metrics: emptyToolMetrics() };
+	const workingMessages = optimizedTools.messages;
 
 	const profile = resolveProfile(options.profile ?? 'balanced', options.custom);
-	const entries: MessageEntry[] = messages.map((message, index) => {
+	const entries: MessageEntry[] = workingMessages.map((message, index) => {
 		const value = message as MessageLike;
 		return {
 			message,
@@ -531,6 +517,7 @@ async function optimizeMessages(
 			)
 			.map((entry) => entry.index),
 	);
+	for (const index of toolSequence.structuralMessageIndexes) structurallyProtected.add(index);
 	const cachePolicy = await applyCachePolicy(
 		entries,
 		structurallyProtected,
@@ -548,10 +535,7 @@ async function optimizeMessages(
 	for (const entry of [...entries].reverse()) {
 		if (structurallyProtected.has(entry.index)) continue;
 		const key = `${entry.role}:${entry.text}`;
-		const next = deduplicateUnits(
-			[...acceptedRegularTexts, key],
-			profile.approximateDeduplication,
-		);
+		const next = deduplicateUnits([...acceptedRegularTexts, key], profile.approximateDeduplication);
 		if (next.length === acceptedRegularTexts.length) continue;
 		acceptedRegularTexts.push(key);
 		acceptedRegularIndexes.add(entry.index);
@@ -565,6 +549,8 @@ async function optimizeMessages(
 	if (kept.length === 0 && entries.length > 0) {
 		return {
 			messages: [entries[entries.length - 1].message],
+			toolMetrics: optimizedTools.metrics,
+			...(optimizedTools.changed ? { bypassReason: 'tool_sequence_content_only' as const } : {}),
 			cacheFingerprints: cachePolicy.fingerprints,
 			cacheMetrics: {
 				stablePrefixTokens: cachePolicy.stablePrefixTokens,
@@ -579,6 +565,10 @@ async function optimizeMessages(
 	}
 	return {
 		messages: kept.map((entry) => entry.message),
+		toolMetrics: optimizedTools.metrics,
+		...(optimizedTools.changed && kept.length === entries.length
+			? { bypassReason: 'tool_sequence_content_only' as const }
+			: {}),
 		cacheFingerprints: cachePolicy.fingerprints,
 		cacheMetrics: {
 			stablePrefixTokens: cachePolicy.stablePrefixTokens,
@@ -606,13 +596,11 @@ function optimizationMetrics(
 	const tokensAfterEstimated = estimateTokens(afterText);
 	const savingsTokensEstimated = Math.max(0, tokensBeforeEstimated - tokensAfterEstimated);
 	const stablePrefixTokens = cacheMetrics.stablePrefixTokens;
-	const dynamicTokensBefore =
-		cacheMetrics.dynamicTokensBefore + toolMetrics.eligibleTokensBefore;
-	const dynamicTokensAfter =
-		cacheMetrics.dynamicTokensAfter + toolMetrics.eligibleTokensAfter;
+	const dynamicTokensBefore = cacheMetrics.dynamicTokensBefore + toolMetrics.eligibleTokensBefore;
+	const dynamicTokensAfter = cacheMetrics.dynamicTokensAfter + toolMetrics.eligibleTokensAfter;
 	const cacheStrategy =
 		'cacheAware' in options && (options as LanguageModelWrapperOptions).cacheAware
-			? (options as LanguageModelWrapperOptions).cacheAware?.strategy ?? 'ignore_cache_signals'
+			? ((options as LanguageModelWrapperOptions).cacheAware?.strategy ?? 'ignore_cache_signals')
 			: 'ignore_cache_signals';
 	const cacheDecision =
 		cacheStrategy === 'ignore_cache_signals'
@@ -668,8 +656,7 @@ function optimizationMetrics(
 		cacheRegistryScope:
 			cacheStrategy === 'ignore_cache_signals'
 				? 'disabled'
-				: ((options as LanguageModelWrapperOptions).cacheAware?.registryScope ??
-					'process_local'),
+				: ((options as LanguageModelWrapperOptions).cacheAware?.registryScope ?? 'process_local'),
 		...((options as LanguageModelWrapperOptions).cacheAware?.registryScope === 'worker_local'
 			? { cacheWarning: 'queue_mode_local_registry' as const }
 			: {}),
@@ -835,11 +822,7 @@ export function wrapLanguageModel<T extends object>(
 					const traceId = observer?.onStart?.(metrics);
 					try {
 						const response = await current.stream?.(optimized.input, ...args);
-						if (
-							!response ||
-							typeof response !== 'object' ||
-							!(Symbol.asyncIterator in response)
-						) {
+						if (!response || typeof response !== 'object' || !(Symbol.asyncIterator in response)) {
 							await recordProviderCacheEvidence(
 								options.cacheAware,
 								optimized.cacheFingerprints,
@@ -934,7 +917,8 @@ export function wrapLanguageModel<T extends object>(
 				};
 			}
 			if (property === 'bindTools' && typeof current.bindTools === 'function') {
-				return (...args: unknown[]) => wrapLanguageModel(current.bindTools?.(...args) ?? {}, options);
+				return (...args: unknown[]) =>
+					wrapLanguageModel(current.bindTools?.(...args) ?? {}, options);
 			}
 			const value = Reflect.get(current, property, receiver);
 			return typeof value === 'function' ? value.bind(current) : value;
