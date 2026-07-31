@@ -3,6 +3,7 @@
 ## Resultado atual — 0.6.0
 
 - [Benchmark cache-aware universal](cache-aware-v0.6.0.md): 20 casos de JSON/API, RAG, logs, histórico e tools mistas; inclui matriz fria/quente das quatro estratégias.
+- [Prova de instalação local](local-install-v0.6.0.md): n8n `2.18.5`, cinco nodes carregados, workflow importado e runtime smoke concluído.
 - Comando reproduzível: `npm run benchmark:cache`.
 
 Os números de cache do benchmark `0.6.0` são modelados e identificados como tal. Resultados provider-billed exigem execução A/B no workflow sanitizado `examples/workflows/chat-history-ab.workflow.json`.

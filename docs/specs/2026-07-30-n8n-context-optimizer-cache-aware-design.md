@@ -374,4 +374,4 @@ Implementação seguirá TDD. Cada etapa deverá manter testes existentes aprova
 - [x] Ampliar telemetria e custo cache-aware.
 - [x] Validar compatibilidade legada de workflows `0.5.2`.
 - [x] Executar benchmarks universais frios e quentes.
-- [ ] Publicar e instalar pacote `0.6.0` localmente.
+- [x] Empacotar, publicar no repositório privado e instalar pacote `0.6.0` localmente.

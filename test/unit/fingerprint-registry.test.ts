@@ -71,7 +71,10 @@ describe('FileSystemFingerprintRegistry', () => {
 				registry.observe(input, new Date(Date.UTC(2026, 6, 30, 10, 0, index))),
 			),
 		);
-		const stored = await registry.get(records[0].fingerprint);
+		const stored = await registry.get(
+			records[0].fingerprint,
+			new Date('2026-07-30T11:00:00Z'),
+		);
 
 		expect(stored?.seenCount).toBe(20);
 	});
@@ -135,9 +138,10 @@ describe('FileSystemFingerprintRegistry', () => {
 			);
 		}
 
-		expect(await registry.get(records[0].fingerprint)).toBeUndefined();
-		expect(await registry.get(records[1].fingerprint)).toBeDefined();
-		expect(await registry.get(records[2].fingerprint)).toBeDefined();
+		const verificationTime = new Date('2026-07-30T11:00:00Z');
+		expect(await registry.get(records[0].fingerprint, verificationTime)).toBeUndefined();
+		expect(await registry.get(records[1].fingerprint, verificationTime)).toBeDefined();
+		expect(await registry.get(records[2].fingerprint, verificationTime)).toBeDefined();
 	});
 
 	it('rejects invalid registry configuration and fingerprints', async () => {

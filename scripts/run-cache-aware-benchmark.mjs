@@ -290,7 +290,6 @@ try {
 	};
 	const report = {
 		version: '0.6.0',
-		generatedAt: new Date().toISOString(),
 		measurement: {
 			tokens: 'deterministic-estimate',
 			cacheCost: 'modeled-provider-cache-at-70-percent-hit',

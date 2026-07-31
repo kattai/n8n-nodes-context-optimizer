@@ -135,6 +135,7 @@ The package is not published to npm and must remain on the local test instance u
 
 - [v0.4 product specification](docs/specs/2026-07-30-n8n-token-saver-v0-4-product-design.md)
 - [v0.6 cache-aware benchmark](benchmarks/results/cache-aware-v0.6.0.md)
+- [v0.6 local installation proof](benchmarks/results/local-install-v0.6.0.md)
 - [Maximum Savings specification](docs/specs/2026-07-30-n8n-token-saver-maximum-savings-design.md)
 - [v0.3 correctness specification](docs/specs/2026-07-30-n8n-context-optimizer-v0-3-correctness-design.md)
 - [n8n node development](https://docs.n8n.io/integrations/creating-nodes/)
