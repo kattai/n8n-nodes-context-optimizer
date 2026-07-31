@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.9.0 — 2026-07-31
+
+- Add opt-in provider-neutral semantic deduplication, task reranking, summary, and judge adapters through the connected n8n Chat Model.
+- Measure compressor and verification tokens before accepting semantic savings; reject low-confidence, malformed, unsafe, or net-negative candidates.
+- Add adaptive `semantic -> deterministic -> original` fallback without a second paid retry.
+- Add Fast, Strict, and Critical deterministic verification levels for exact facts, protected blocks, negations, polarity, quoted values, and reversible structure.
+- Protect incremental memory summaries with required exact values, revision checks, and an estimated token ceiling.
+- Add a no-provider benchmark proving semantic opt-in, cost accounting, contradiction rejection, and deterministic fallback.
+
 ## 0.8.0 — 2026-07-31
 
 - Add Context Saver Memory with scoped sessions, current fact versioning, protected corrections and pending work, incremental summaries, recent windows, gzip archives, TTL, and atomic writes.

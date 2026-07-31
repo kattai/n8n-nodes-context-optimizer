@@ -1,6 +1,15 @@
 # Benchmarks do Context Saver
 
-## Resultado atual — 0.8.0
+## Resultado atual — 0.9.0
+
+- [Semântica e Quality Guard](semantic-quality-v0.9.0.md): adapters mockados, custo líquido, rejeição de contradição e fallback.
+- Semântica opt-in: **2.631 → 1.252 tokens**, economia líquida estimada de **50,89%**.
+- Judge rejeitado: uma chamada, fallback determinístico, sem retry pago automático.
+- Comando reproduzível: `npm run benchmark:v0.9`.
+
+Adapters mockados comprovam controle, medição e fallback; não representam garantia sobre qualidade de um modelo externo.
+
+## Resultado anterior — 0.8.0
 
 - [Memória e lazy tools](memory-tools-v0.8.0.md): histórico crescente e 24 schemas de ferramentas.
 - Redução estimada: **92,27%** na memória enviada e **83,21%** nos schemas enviados.
@@ -34,10 +43,10 @@ Dois workflows usam a mesma pergunta, o mesmo prompt e o mesmo Gemini 2.5 Flash.
 
 ## Resultado medido
 
-| Variante | Tokens reais de entrada | Tokens de saída | Total reportado |
-|---|---:|---:|---:|
-| Baseline | 12.332 | 28 | 12.360 |
-| Otimizado | 384 | 28 | 412 |
+| Variante  | Tokens reais de entrada | Tokens de saída | Total reportado |
+| --------- | ----------------------: | --------------: | --------------: |
+| Baseline  |                  12.332 |              28 |          12.360 |
+| Otimizado |                     384 |              28 |             412 |
 
 - Economia real de entrada: **11.948 tokens (96,89%)**
 - Qualidade neste teste: **resposta idêntica**
@@ -46,13 +55,13 @@ Dois workflows usam a mesma pergunta, o mesmo prompt e o mesmo Gemini 2.5 Flash.
 
 ## Eficiência por tipo de conteúdo
 
-| Caso determinístico | Antes | Depois | Redução |
-|---|---:|---:|---:|
-| Texto repetido | 1.167 | 20 | 98,29% |
-| JSON tabular | 6.884 | 3.348 | 51,37% |
-| Logs repetidos | 2.717 | 20 | 99,26% |
-| Texto único | 10 | 10 | 0% — fallback |
-| Código/YAML | 17 | 17 | 0% — preservado |
+| Caso determinístico | Antes | Depois |         Redução |
+| ------------------- | ----: | -----: | --------------: |
+| Texto repetido      | 1.167 |     20 |          98,29% |
+| JSON tabular        | 6.884 |  3.348 |          51,37% |
+| Logs repetidos      | 2.717 |     20 |          99,26% |
+| Texto único         |    10 |     10 |   0% — fallback |
+| Código/YAML         |    17 |     17 | 0% — preservado |
 
 Isso evita uma conclusão falsa: a ferramenta é muito eficiente em repetição, JSON e logs; ela não tenta “economizar” texto único ou código quando isso aumentaria o risco.
 

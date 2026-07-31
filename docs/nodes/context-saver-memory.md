@@ -65,7 +65,14 @@ Protected `kind` values: `correction`, `pending`, `decision`, and `active_failur
 
 ## Incremental summary safety
 
-Set `Summary Based on Revision` when a separate summarizer read a specific session revision. If another update happened first, Context Saver rejects that stale summary and keeps the last valid one. Empty and oversized summaries are also rejected.
+Set `Summary Based on Revision` when a separate summarizer read a specific session revision. If another update happened first, Context Saver rejects that stale summary and keeps the last valid one.
+
+`Summary Safety` adds two guards:
+
+- **Required Exact Values:** one value per line; any missing value rejects the candidate.
+- **Maximum Summary Tokens:** rejects a candidate above the configured estimate.
+
+Empty, stale, oversized, or incomplete summaries never replace the last valid summary.
 
 ## Deployment limits
 

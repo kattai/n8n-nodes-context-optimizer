@@ -45,6 +45,24 @@ These are measured ranges for content that is safe and eligible to optimize, not
 
 Semantic compression is experimental and disabled by default. Code is preserved byte for byte.
 
+## Guarded semantic optimization
+
+Context Saver v0.9 can use one connected n8n Chat Model as an optional adapter for semantic deduplication, task reranking, summary, and judging. It stays provider-neutral: OpenAI, Anthropic, Gemini, OpenRouter, Ollama, or another compatible model can supply the adapter.
+
+- Disabled by default; deterministic compression remains the normal path.
+- Every adapter cost enters net-savings math.
+- Recent/protected units cannot be removed by semantic selection.
+- Low confidence, invalid JSON, missing facts, contradictions, or negative net savings fall back.
+- Fallback order is semantic, deterministic, then original; no second paid retry occurs automatically.
+
+Quality verification levels:
+
+| Level        | Checks                                                               |
+| ------------ | -------------------------------------------------------------------- |
+| **Fast**     | Protected facts/blocks, non-empty output, valid/reversible structure |
+| **Strict**   | Fast plus negation and protected-fact polarity; default              |
+| **Critical** | Strict plus exact quoted values                                      |
+
 ## Cache-aware operation
 
 Profile strength and provider caching are separate decisions:
@@ -105,7 +123,7 @@ Install the generated tarball in a local/self-hosted n8n user folder:
 
 ```powershell
 cd $HOME\.n8n\nodes
-npm install --save-exact C:\path\to\n8n-nodes-context-optimizer-0.8.0.tgz
+npm install --save-exact C:\path\to\n8n-nodes-context-optimizer-0.9.0.tgz
 ```
 
 Restart n8n after installation. The package targets n8n `2.18.5`. Filesystem resources are not encrypted; use a secured shared directory in queue mode and leave secret-like storage disabled unless explicitly required.
@@ -114,6 +132,7 @@ The package is currently private and is not published to npm.
 
 ## Evidence and design
 
+- [v0.9 semantic and adaptive quality benchmark](benchmarks/results/semantic-quality-v0.9.0.md)
 - [v0.8 memory and lazy-tools benchmark](benchmarks/results/memory-tools-v0.8.0.md)
 - [v0.7 profile benchmark](benchmarks/results/profile-v2-results.md)
 - [v0.7 design](docs/superpowers/specs/2026-07-31-context-saver-v2-design.md)

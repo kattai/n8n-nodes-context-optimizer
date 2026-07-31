@@ -40,3 +40,22 @@ HTTP Request
 ```
 
 Pass only `optimizedContent` downstream. The Simple output intentionally excludes the original.
+
+## Quality verification
+
+- **Fast:** exact protected values/blocks and reversible structure.
+- **Strict:** also rejects changed negations and protected-value polarity. Recommended default.
+- **Critical:** also keeps quoted values exact.
+
+Failed candidates fall back to a safer deterministic result, then to the original. Fallback does not trigger a second model call.
+
+## Experimental semantic pipeline
+
+For **Build Agent Context**, enable `Experimental Semantic Compression` and connect any compatible n8n Chat Model. Version 2 exposes four opt-in stages:
+
+- **Semantic Deduplication:** keeps only confident redundant-unit representatives.
+- **Task Reranking:** available only with Custom plus unique-content trimming.
+- **LLM Summary:** runs only above the configured summary threshold.
+- **LLM Judge:** optionally rejects omissions or contradictions.
+
+Deduplication, reranking, and judging default off. Adapter and judge token costs are subtracted from reported net savings. Keep this pipeline off for small context, tool-call sequences, or tasks where deterministic packing already solves the problem.
