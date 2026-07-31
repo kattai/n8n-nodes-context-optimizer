@@ -12,6 +12,7 @@ import { NodeConnectionTypes, NodeOperationError } from 'n8n-workflow';
 import { z } from 'zod';
 import {
 	retrieveContext,
+	type RetrievalBudgetState,
 	type RetrievalPolicy,
 	type RetrievalRequest,
 	type RetrievalResult,
@@ -31,10 +32,28 @@ function list(value: string): string[] {
 
 const resourceId = z.string().min(1).describe('Resource ID returned by Context Store');
 const limit = z.number().int().positive().optional().describe('Maximum results requested');
-const path = z
-	.string()
-	.optional()
-	.describe('JSON array path, such as orders or data.items');
+const path = z.string().optional().describe('Safe JSONPath, such as $.orders or $.data.items');
+const primitive = z.union([z.string(), z.number(), z.boolean(), z.null()]);
+const filterValue = z.union([primitive, z.array(primitive)]);
+const compoundFilter = z.object({
+	path: z.string().min(1).describe('Field path inside each record'),
+	operator: z
+		.enum([
+			'eq',
+			'ne',
+			'gt',
+			'gte',
+			'lt',
+			'lte',
+			'contains',
+			'starts_with',
+			'ends_with',
+			'in',
+			'exists',
+		])
+		.describe('Comparison operator'),
+	value: filterValue.optional().describe('Comparison value; not required by exists'),
+});
 const operations = [
 	'search_context',
 	'filter_records',
@@ -49,16 +68,25 @@ const requestSchema = z.discriminatedUnion('operation', [
 		resourceId,
 		query: z.string().min(1).describe('Terms to locate in the stored resource'),
 		limit,
+		cursor: z.string().optional().describe('Cursor returned by the previous page'),
+		neighborWindow: z
+			.number()
+			.int()
+			.min(0)
+			.max(5)
+			.optional()
+			.describe('Adjacent chunks to include'),
 	}),
 	z.object({
 		operation: z.literal('filter_records'),
 		resourceId,
 		path,
-		filters: z
-			.record(z.union([z.string(), z.number(), z.boolean(), z.null()]))
-			.describe('Required equality filters'),
+		filters: z.record(primitive).optional().describe('Backward-compatible equality filters'),
+		where: z.array(compoundFilter).optional().describe('Compound filters with explicit operators'),
+		filterLogic: z.enum(['and', 'or']).optional().describe('How compound filters are combined'),
 		fields: z.array(z.string()).optional().describe('Fields to return'),
 		limit,
+		cursor: z.string().optional().describe('Cursor returned by the previous page'),
 	}),
 	z.object({
 		operation: z.literal('get_exact_value'),
@@ -93,12 +121,19 @@ const toolInputSchema = z.object({
 		.describe('Resource ID returned by Token Saver Store or Content'),
 	query: z.string().min(1).optional().describe('Terms to locate with search_context'),
 	path,
-	filters: z
-		.record(z.union([z.string(), z.number(), z.boolean(), z.null()]))
-		.optional()
-		.describe('Equality filters used by filter_records'),
+	filters: z.record(primitive).optional().describe('Equality filters used by filter_records'),
+	where: z.array(compoundFilter).optional().describe('Compound record filters'),
+	filterLogic: z.enum(['and', 'or']).optional().describe('Combine filters with AND or OR'),
 	fields: z.array(z.string()).optional().describe('Fields to return from matching records'),
 	limit,
+	cursor: z.string().optional().describe('Opaque cursor returned by a previous retrieval'),
+	neighborWindow: z
+		.number()
+		.int()
+		.min(0)
+		.max(5)
+		.optional()
+		.describe('Adjacent search chunks to include'),
 	section: z.number().int().nonnegative().optional().describe('Zero-based section index'),
 	start: z.number().int().nonnegative().optional().describe('Fragment start character'),
 	end: z.number().int().positive().optional().describe('Fragment end character'),
@@ -112,7 +147,7 @@ export function normalizeToolRequest(value: unknown): RetrievalRequest {
 			? 'get_original_fragment'
 			: input.section !== undefined
 				? 'get_section'
-				: input.filters !== undefined
+				: input.filters !== undefined || input.where !== undefined
 					? 'filter_records'
 					: input.query !== undefined
 						? 'search_context'
@@ -122,19 +157,24 @@ export function normalizeToolRequest(value: unknown): RetrievalRequest {
 	return requestSchema.parse({ ...input, operation }) as RetrievalRequest;
 }
 
-const executionCallCounts = new Map<string, { count: number; updatedAt: number }>();
+interface ExecutionRetrievalState extends RetrievalBudgetState {
+	count: number;
+	updatedAt: number;
+}
 
-function nextExecutionCall(executionId: string, nodeName: string): number {
+const executionStates = new Map<string, ExecutionRetrievalState>();
+
+function nextExecutionState(executionId: string, nodeName: string): ExecutionRetrievalState {
 	const now = Date.now();
-	for (const [key, state] of executionCallCounts) {
-		if (now - state.updatedAt > 60 * 60 * 1000) executionCallCounts.delete(key);
+	for (const [key, state] of executionStates) {
+		if (now - state.updatedAt > 60 * 60 * 1000) executionStates.delete(key);
 	}
 	const key = `${executionId}:${nodeName}`;
-	const state = executionCallCounts.get(key) ?? { count: 0, updatedAt: now };
+	const state = executionStates.get(key) ?? { count: 0, tokensUsed: 0, updatedAt: now };
 	state.count++;
 	state.updatedAt = now;
-	executionCallCounts.set(key, state);
-	return state.count;
+	executionStates.set(key, state);
+	return state;
 }
 
 export class ContextRetrieverTool implements INodeType {
@@ -147,7 +187,8 @@ export class ContextRetrieverTool implements INodeType {
 		},
 		group: ['transform'],
 		version: 1,
-		description: 'Let an AI Agent recover exact details from content virtualized outside its prompt',
+		description:
+			'Let an AI Agent recover exact details from content virtualized outside its prompt',
 		defaults: { name: 'Retrieve Exact Context' },
 		subtitle: '={{$parameter["scope"]}}',
 		inputs: [],
@@ -162,7 +203,8 @@ export class ContextRetrieverTool implements INodeType {
 				required: true,
 				default:
 					'Retrieve an exact missing value or record from a Token Saver resource. Use only when the compact context does not contain the required ID, date, amount, field, or record. Never guess missing data.',
-				description: 'Short instruction shown to the agent; keep retrieval rules here instead of the system prompt',
+				description:
+					'Short instruction shown to the agent; keep retrieval rules here instead of the system prompt',
 			},
 			{
 				displayName: 'Scope',
@@ -170,7 +212,8 @@ export class ContextRetrieverTool implements INodeType {
 				type: 'string',
 				required: true,
 				default: '={{ $workflow.id }}',
-				description: 'Isolation key; must exactly match Token Saver Store or Content Virtualization',
+				description:
+					'Isolation key; must exactly match Token Saver Store or Content Virtualization',
 			},
 			{
 				displayName: 'Storage Directory',
@@ -194,7 +237,17 @@ export class ContextRetrieverTool implements INodeType {
 				type: 'number',
 				typeOptions: { minValue: 50, maxValue: 32000, numberPrecision: 0 },
 				default: 4000,
-				description: 'Keep tool responses below this estimated size so retrieval does not erase the savings',
+				description:
+					'Keep tool responses below this estimated size so retrieval does not erase the savings',
+			},
+			{
+				displayName: 'Maximum Tokens per Execution',
+				name: 'maxExecutionTokens',
+				type: 'number',
+				typeOptions: { minValue: 50, maxValue: 128000, numberPrecision: 0 },
+				default: 12000,
+				description:
+					'Cumulative token cap across every retrieval call made by this agent execution',
 			},
 			{
 				displayName: 'Maximum Calls per Execution',
@@ -225,7 +278,8 @@ export class ContextRetrieverTool implements INodeType {
 				name: 'allowFullOriginal',
 				type: 'boolean',
 				default: false,
-				description: 'Whether to allow the full original when it is safe and still fits the retrieval token budget',
+				description:
+					'Whether to allow the full original when it is safe and still fits the retrieval token budget',
 			},
 		],
 	};
@@ -238,35 +292,25 @@ export class ContextRetrieverTool implements INodeType {
 			scope: this.getNodeParameter('scope', 0, this.getWorkflow().id) as string,
 			maxResults: this.getNodeParameter('maxResults', 0, 20) as number,
 			maxTokens: this.getNodeParameter('maxTokens', 0, 4000) as number,
+			maxExecutionTokens: this.getNodeParameter('maxExecutionTokens', 0, 12000) as number,
 			allowedFields: list(this.getNodeParameter('allowedFields', 0, '') as string),
 			blockedFields: list(this.getNodeParameter('blockedFields', 0, '') as string),
-			allowFullOriginal: this.getNodeParameter(
-				'allowFullOriginal',
-				0,
-				false,
-			) as boolean,
+			allowFullOriginal: this.getNodeParameter('allowFullOriginal', 0, false) as boolean,
 		};
-		const store = new FileSystemResourceStore(
-			directory.trim() || defaultStorageDirectory(),
-		);
+		const store = new FileSystemResourceStore(directory.trim() || defaultStorageDirectory());
 		const returnData: INodeExecutionData[] = [];
 		for (let itemIndex = 0; itemIndex < items.length; itemIndex++) {
 			try {
 				const langChainSchema = toolInputSchema as unknown as z.ZodType<unknown>;
-				const tool = new DynamicStructuredTool<
-					z.ZodType<unknown>,
-					unknown,
-					unknown,
-					string
-				>({
+				const tool = new DynamicStructuredTool<z.ZodType<unknown>, unknown, unknown, string>({
 					name: 'retrieve_context',
 					description: this.getNodeParameter('toolDescription', itemIndex) as string,
 					schema: langChainSchema,
 					func: async (input) => {
 						const request = normalizeToolRequest(input);
-						const call = nextExecutionCall(this.getExecutionId(), this.getNode().name);
+						const state = nextExecutionState(this.getExecutionId(), this.getNode().name);
 						const result: RetrievalResult =
-							call > maximumCalls
+							state.count > maximumCalls
 								? {
 										ok: false,
 										operation: request.operation,
@@ -277,7 +321,7 @@ export class ContextRetrieverTool implements INodeType {
 											message: `Maximum of ${maximumCalls} retrieval calls exceeded`,
 										},
 									}
-								: await retrieveContext(store, request, policy);
+								: await retrieveContext(store, request, policy, state);
 						return JSON.stringify(compactRetrievalResult(result));
 					},
 				});
@@ -311,25 +355,16 @@ export class ContextRetrieverTool implements INodeType {
 			scope: this.getNodeParameter('scope', itemIndex, this.getWorkflow().id) as string,
 			maxResults: this.getNodeParameter('maxResults', itemIndex, 20) as number,
 			maxTokens: this.getNodeParameter('maxTokens', itemIndex, 4000) as number,
+			maxExecutionTokens: this.getNodeParameter('maxExecutionTokens', itemIndex, 12000) as number,
 			allowedFields: list(this.getNodeParameter('allowedFields', itemIndex, '') as string),
 			blockedFields: list(this.getNodeParameter('blockedFields', itemIndex, '') as string),
-			allowFullOriginal: this.getNodeParameter(
-				'allowFullOriginal',
-				itemIndex,
-				false,
-			) as boolean,
+			allowFullOriginal: this.getNodeParameter('allowFullOriginal', itemIndex, false) as boolean,
 		};
-		const store = new FileSystemResourceStore(
-			directory.trim() || defaultStorageDirectory(),
-		);
+		const store = new FileSystemResourceStore(directory.trim() || defaultStorageDirectory());
 		let callCount = 0;
+		const budgetState: RetrievalBudgetState = { tokensUsed: 0 };
 		const langChainSchema = toolInputSchema as unknown as z.ZodType<unknown>;
-		const tool = new DynamicStructuredTool<
-			z.ZodType<unknown>,
-			unknown,
-			unknown,
-			string
-		>({
+		const tool = new DynamicStructuredTool<z.ZodType<unknown>, unknown, unknown, string>({
 			name: 'retrieve_context',
 			description: this.getNodeParameter('toolDescription', itemIndex) as string,
 			schema: langChainSchema,
@@ -359,11 +394,7 @@ export class ContextRetrieverTool implements INodeType {
 									message: `Maximum of ${maximumCalls} retrieval calls exceeded`,
 								},
 							}
-						: await retrieveContext(
-								store,
-								request as RetrievalRequest,
-								policy,
-							);
+						: await retrieveContext(store, request as RetrievalRequest, policy, budgetState);
 				this.addOutputData(NodeConnectionTypes.AiTool, trace, [
 					[
 						{
@@ -374,6 +405,7 @@ export class ContextRetrieverTool implements INodeType {
 								exact: result.exact,
 								truncated: result.truncated ?? false,
 								tokensEstimated: result.tokensEstimated ?? 0,
+								executionTokensUsed: budgetState.tokensUsed,
 								error: result.error as unknown as IDataObject,
 							},
 						},

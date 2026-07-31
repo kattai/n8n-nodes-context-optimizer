@@ -28,9 +28,7 @@ function contentSavings(result: ContentOptimizationResult): TokenSavingsSummary 
 		percent: result.tokens.savingsPercent,
 		measurement: 'estimated',
 		qualityPassed: result.quality.passed,
-		...(result.quality.fallbackReason
-			? { fallbackReason: result.quality.fallbackReason }
-			: {}),
+		...(result.quality.fallbackReason ? { fallbackReason: result.quality.fallbackReason } : {}),
 	};
 }
 
@@ -117,10 +115,14 @@ export function compactRetrievalResult(result: RetrievalResult): Record<string, 
 		ok: true,
 		data: result.data,
 		source: {
-			resourceId: result.resourceId,
-			...(result.path ? { path: result.path } : {}),
-			exact: result.exact,
+			resourceId: result.evidence?.resourceId ?? result.resourceId,
+			...(result.evidence?.path || result.path
+				? { path: result.evidence?.path ?? result.path }
+				: {}),
+			...(result.evidence?.hash ? { hash: result.evidence.hash } : {}),
+			exact: result.evidence?.exact ?? result.exact,
 		},
+		...(result.pagination ? { page: result.pagination } : {}),
 		...(result.truncated ? { truncated: true } : {}),
 		...(result.redacted ? { redacted: true } : {}),
 		...(result.tokensEstimated !== undefined ? { tokens: result.tokensEstimated } : {}),
@@ -129,10 +131,13 @@ export function compactRetrievalResult(result: RetrievalResult): Record<string, 
 
 export function analysisOutput(analysis: TokenAnalysis): Record<string, unknown> {
 	const before = analysis.measurement.original;
-	const after = analysis.actual.available
-		? analysis.actual.inputTokens
-		: analysis.measurement.sent;
-	const saved = before - after - analysis.measurement.compressor - analysis.measurement.retrieved - analysis.measurement.verifier;
+	const after = analysis.actual.available ? analysis.actual.inputTokens : analysis.measurement.sent;
+	const saved =
+		before -
+		after -
+		analysis.measurement.compressor -
+		analysis.measurement.retrieved -
+		analysis.measurement.verifier;
 	return {
 		tokenSavings: {
 			before,
@@ -181,14 +186,10 @@ export function modelComparisonOutput(
 	const provider = comparison.delta.inputTokenBasis === 'provider-actual';
 	const before =
 		baselineInput ??
-		(provider
-			? comparison.baseline.actual.inputTokens
-			: comparison.baseline.measurement.sent);
+		(provider ? comparison.baseline.actual.inputTokens : comparison.baseline.measurement.sent);
 	const after =
 		optimizedInput ??
-		(provider
-			? comparison.optimized.actual.inputTokens
-			: comparison.optimized.measurement.sent);
+		(provider ? comparison.optimized.actual.inputTokens : comparison.optimized.measurement.sent);
 	const saved = before - after;
 	return {
 		tokenSavings: {

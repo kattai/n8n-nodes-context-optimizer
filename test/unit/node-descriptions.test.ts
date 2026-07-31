@@ -83,9 +83,7 @@ describe('Token Saver node descriptions', () => {
 		expect(resolveNodeCacheStrategy({ cacheStrategy: 'automatic_hybrid' })).toBe(
 			'automatic_hybrid',
 		);
-		expect(resolveNodeCacheStrategy({ cacheStrategy: 'invalid' })).toBe(
-			'ignore_cache_signals',
-		);
+		expect(resolveNodeCacheStrategy({ cacheStrategy: 'invalid' })).toBe('ignore_cache_signals');
 	});
 
 	it('supports both legacy supplyData and current n8n AI Tool execution', () => {
@@ -116,5 +114,19 @@ describe('Token Saver node descriptions', () => {
 				filters: { status: 'open' },
 			}),
 		).toMatchObject({ operation: 'filter_records', filters: { status: 'open' } });
+	});
+
+	it('infers compound record filtering without requiring an explicit operation', () => {
+		expect(
+			normalizeToolRequest({
+				resourceId: 'ctx_test',
+				path: '$.records',
+				where: [{ path: 'total', operator: 'gte', value: 1000 }],
+				filterLogic: 'and',
+			}),
+		).toMatchObject({
+			operation: 'filter_records',
+			where: [{ path: 'total', operator: 'gte', value: 1000 }],
+		});
 	});
 });

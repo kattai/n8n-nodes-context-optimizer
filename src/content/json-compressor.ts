@@ -8,11 +8,10 @@ function jsonPathPattern(pattern: string): RegExp {
 		.trim()
 		.replace(/^\$?\.?/, '$.')
 		.replace(/^\.$/, '$');
-	const escaped = normalized
-		.replace(/[.+?^${}()|[\]\\]/g, '\\$&')
-		.replace(/\\\[\*\\\]/g, '\\[\\d+\\\]')
-		.replace(/\*/g, '[^.\\[\\]]+');
-	return new RegExp(`^${escaped}$`);
+	const escaped = normalized.replace(/[.+?^${}()|[\]\\]/g, '\\$&');
+	const withArrayWildcards = escaped.split('\\[*\\]').join('\\[\\d+\\]');
+	const withPropertyWildcards = withArrayWildcards.replace(/\*/g, '[^.\\[\\]]+');
+	return new RegExp(`^${withPropertyWildcards}$`);
 }
 
 function matchesPath(path: string, patterns: string[]): boolean {

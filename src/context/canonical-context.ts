@@ -248,7 +248,11 @@ export function canonicalizeContext(input: CanonicalContextInput): CanonicalCont
 		toolSequences,
 		hash: contextHash({
 			version: 1,
-			blocks: blocks.map(({ id: _id, ...block }) => block),
+			blocks: blocks.map((block) => {
+				const hashable = { ...block } as Partial<ContextBlock>;
+				delete hashable.id;
+				return hashable;
+			}),
 			toolSequences,
 		}),
 	};

@@ -88,6 +88,12 @@ describe('simple node outputs', () => {
 			exact: true,
 			path: '[0].total',
 			data: 12850,
+			evidence: {
+				resourceId: 'ctx_1',
+				path: '[0].total',
+				hash: 'abc123',
+				exact: true,
+			},
 			redacted: false,
 			truncated: false,
 			tokensEstimated: 3,
@@ -96,24 +102,28 @@ describe('simple node outputs', () => {
 		expect(compact).toEqual({
 			ok: true,
 			data: 12850,
-			source: { resourceId: 'ctx_1', path: '[0].total', exact: true },
+			source: { resourceId: 'ctx_1', path: '[0].total', hash: 'abc123', exact: true },
 			tokens: 3,
 		});
 	});
 
 	it('summarizes a provider A/B comparison without nested diagnostics', () => {
-		const output = modelComparisonOutput({
-			baseline: {} as never,
-			optimized: {} as never,
-			delta: {
-				inputTokens: -2_080,
-				netTokens: 0,
-				latencyMs: 12,
-				fallbacks: 0,
-				qualityGuardFailures: 0,
-				inputTokenBasis: 'provider-actual',
+		const output = modelComparisonOutput(
+			{
+				baseline: {} as never,
+				optimized: {} as never,
+				delta: {
+					inputTokens: -2_080,
+					netTokens: 0,
+					latencyMs: 12,
+					fallbacks: 0,
+					qualityGuardFailures: 0,
+					inputTokenBasis: 'provider-actual',
+				},
 			},
-		}, 3_120, 1_040);
+			3_120,
+			1_040,
+		);
 
 		expect(output).toEqual({
 			tokenSavings: {
