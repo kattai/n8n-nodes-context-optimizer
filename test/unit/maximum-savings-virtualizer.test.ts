@@ -17,7 +17,9 @@ async function temporaryStore(): Promise<FileSystemResourceStore> {
 
 afterEach(async () => {
 	await Promise.all(
-		directories.splice(0).map(async (directory) => await rm(directory, { recursive: true, force: true })),
+		directories
+			.splice(0)
+			.map(async (directory) => await rm(directory, { recursive: true, force: true })),
 	);
 });
 
@@ -57,21 +59,18 @@ describe('Maximum Savings virtualizer', () => {
 				options: options(store),
 			});
 			if (result.targetBandReached) reached++;
-			expect(result.eligibleTokensAfter).toBeLessThanOrEqual(
-				result.eligibleTokensBefore * 0.3,
-			);
+			expect(result.eligibleTokensAfter).toBeLessThanOrEqual(result.eligibleTokensBefore * 0.3);
 			expect(result.retrievalRequired).toBe(true);
 		}
 		expect(reached).toBeGreaterThanOrEqual(19);
 	});
 
 	it('falls back to structural content when storage fails', async () => {
-		const content = JSON.stringify(
-			Array.from({ length: 150 }, (_, index) => ({
-				id: index,
-				description: 'Large deterministic record '.repeat(10),
-			})),
-		);
+		const content = Array.from(
+			{ length: 150 },
+			(_, index) =>
+				`Unique operational section ${index}: marker-${index} ${'detailed evidence '.repeat(10)}`,
+		).join('\n\n');
 		const structural = optimizeContent(content, { contentType: 'tool_output' });
 		const failingStore: ResourceStore = {
 			store: async () => {

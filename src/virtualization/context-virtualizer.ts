@@ -1,5 +1,6 @@
 import { estimateTokens } from '../core/token-estimator';
 import type { DetectedContentType } from '../content/types';
+import { rankChunks } from '../relevance/chunk-selector';
 
 export interface ContextVirtualizationOptions {
 	thresholdTokens: number;
@@ -30,27 +31,6 @@ interface Candidate {
 	score: number;
 }
 
-function normalize(value: string): string {
-	return value
-		.normalize('NFD')
-		.replace(/[\u0300-\u036f]/g, '')
-		.toLowerCase();
-}
-
-function terms(value: string): string[] {
-	return [...new Set(normalize(value).match(/[\p{L}\p{N}_-]{2,}/gu) ?? [])];
-}
-
-function score(value: string, query: string[]): number {
-	const normalized = normalize(value);
-	return query.reduce(
-		(total, term) =>
-			total +
-			(normalized.includes(term) ? Math.min(6, Math.max(1, Math.ceil(term.length / 3))) : 0),
-		0,
-	);
-}
-
 function fixedChunks(value: string, size = 1200): string[] {
 	const chunks: string[] = [];
 	for (let index = 0; index < value.length; index += size) {
@@ -62,7 +42,6 @@ function fixedChunks(value: string, size = 1200): string[] {
 function contentCandidates(
 	content: string,
 	type: DetectedContentType,
-	query: string[],
 ): { candidates: Candidate[]; prefix: string[] } {
 	if (content.startsWith('@json-table\n')) {
 		const lines = content.split('\n');
@@ -74,7 +53,7 @@ function contentCandidates(
 				index,
 				path: `[${index}]`,
 				content: line,
-				score: score(line, query),
+				score: 0,
 			})),
 		};
 	}
@@ -90,7 +69,7 @@ function contentCandidates(
 			index,
 			path: `section[${index}]`,
 			content: chunk.trim(),
-			score: score(chunk, query),
+			score: 0,
 		})),
 	};
 }
@@ -153,23 +132,31 @@ export function virtualizeContext(
 		};
 	}
 
-	const query = terms(options.currentTask ?? '');
-	const { candidates, prefix } = contentCandidates(content, type, query);
-	const ordered =
-		query.length > 0
-			? [...candidates].sort((left, right) => right.score - left.score || left.index - right.index)
-			: candidates;
+	const query = String(options.currentTask ?? '').trim();
+	const { candidates, prefix } = contentCandidates(content, type);
+	const ranked = rankChunks(
+		candidates.map((candidate) => ({
+			id: candidate.path,
+			content: candidate.content,
+			index: candidate.index,
+			source: type,
+		})),
+		{
+			query,
+			maxTokens: Number.MAX_SAFE_INTEGER,
+			maxChunks: Math.max(1, candidates.length),
+			neighborWindow: 1,
+		},
+	);
+	const ordered = ranked.map((entry) => ({
+		index: entry.index,
+		path: entry.id,
+		content: entry.content,
+		score: entry.score,
+	}));
 	const selected: Candidate[] = [];
 	let includedPrefix: string[] = [];
-	const emptyReceipt = receipt(
-		resourceId,
-		type,
-		options,
-		sourceTokens,
-		candidates.length,
-		0,
-		'',
-	);
+	const emptyReceipt = receipt(resourceId, type, options, sourceTokens, candidates.length, 0, '');
 	if (estimateTokens(emptyReceipt) > options.maxPreviewTokens) {
 		return {
 			applied: false,
