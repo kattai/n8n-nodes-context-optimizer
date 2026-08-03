@@ -1,11 +1,11 @@
 {
 	"id": "contextSaverV2JsonDemo",
-	"name": "[LAB] Context Saver v2 — JSON recuperável",
+	"name": "[LAB] Context Saver v2 - JSON recuperavel",
 	"active": false,
 	"nodes": [
 		{
 			"parameters": {
-				"content": "## Context Saver v2 — teste sem API externa de dados\n\n1. Gera 120 registros localmente.\n2. Savings envia apenas um preview relevante.\n3. O original fica recuperável por resourceId.\n4. O agente busca exatamente `records[80]`.\n5. Metrics mostra economia elegível, total e líquida.\n\nConfigure somente a credencial do modelo Gemini antes de executar.",
+				"content": "## Context Saver v2 - teste sem API externa de dados\n\n1. Gera 120 registros localmente.\n2. Savings envia apenas um preview relevante.\n3. O original fica recuperavel por resourceId.\n4. O agente busca exatamente `records[80]`.\n5. Metrics mostra economia elegivel, total e liquida.\n\nConfigure somente a credencial do modelo Gemini antes de executar.",
 				"height": 520,
 				"width": 1780,
 				"color": 5
@@ -28,7 +28,7 @@
 			"parameters": {
 				"mode": "runOnceForAllItems",
 				"language": "javaScript",
-				"jsCode": "const records = Array.from({ length: 120 }, (_, index) => ({\n  id: 'ORDER-' + String(index).padStart(3, '0'),\n  status: index % 4 === 0 ? 'pending' : 'approved',\n  amount: 500000 + index * 1250,\n  region: 'region-' + (index % 12),\n  note: 'Contexto operacional repetido que deve permanecer recuperável.'\n}));\nreturn [{ json: { content: JSON.stringify({ source: 'local-demo', records }), expected: records[80] } }];"
+				"jsCode": "const records = Array.from({ length: 120 }, (_, index) => ({\n  id: 'ORDER-' + String(index).padStart(3, '0'),\n  status: index % 4 === 0 ? 'pending' : 'approved',\n  amount: 500000 + index * 1250,\n  region: 'region-' + (index % 12),\n  note: 'Contexto operacional repetido que deve permanecer recuperavel.'\n}));\nreturn [{ json: { content: JSON.stringify({ source: 'local-demo', records }), expected: records[80] } }];"
 			},
 			"id": "generate-json-v2",
 			"name": "Gerar JSON grande",
@@ -52,7 +52,7 @@
 				"outputDetail": "simple"
 			},
 			"id": "context-content-v2",
-			"name": "Context Saver Content — Savings",
+			"name": "Context Saver Content - Savings",
 			"type": "n8n-nodes-context-optimizer.contextOptimizer",
 			"typeVersion": 2,
 			"position": [-160, 0]
@@ -72,15 +72,15 @@
 		{
 			"parameters": {
 				"promptType": "define",
-				"text": "=Resource ID: {{ $('Context Saver Content — Savings').item.json.contextResource.resourceId }}\nRecupere exatamente records[80] e responda somente com id, status, amount e region.",
+				"text": "=Resource ID: {{ $('Context Saver Content - Savings').item.json.contextResource.resourceId }}\nRecupere exatamente records[80] e responda somente com id, status, amount e region.",
 				"options": {
-					"systemMessage": "Use retrieve_context com operation=get_exact_value e path=records[80]. Nunca invente valores omitidos. Use apenas a evidência exata retornada pela tool.",
+					"systemMessage": "Use retrieve_context com operation=get_exact_value e path=records[80]. Nunca invente valores omitidos. Use apenas a evidencia exata retornada pela tool.",
 					"maxIterations": 3,
 					"returnIntermediateSteps": false
 				}
 			},
 			"id": "agent-v2",
-			"name": "Agente — resposta exata",
+			"name": "Agente resposta exata",
 			"type": "@n8n/n8n-nodes-langchain.agent",
 			"typeVersion": 3.1,
 			"position": [360, 0]
@@ -110,17 +110,17 @@
 				"cacheStrategy": "automatic_hybrid"
 			},
 			"id": "context-model-v2",
-			"name": "Context Saver Model — Savings",
+			"name": "Context Saver Model - Savings",
 			"type": "n8n-nodes-context-optimizer.optimizedChatModel",
 			"typeVersion": 2,
 			"position": [360, 240]
 		},
 		{
 			"parameters": {
-				"toolDescription": "Recupere somente o valor exato configurado nos defaults. Nunca invente valores ausentes e mantenha a evidência retornada.",
+				"toolDescription": "Recupere somente o valor exato configurado nos defaults. Nunca invente valores ausentes e mantenha a evidencia retornada.",
 				"scope": "context-saver-v2-demo",
 				"toolCallDefaults": {
-					"resourceId": "={{ $('Context Saver Content — Savings').item.json.contextResource.resourceId }}",
+					"resourceId": "={{ $('Context Saver Content - Savings').item.json.contextResource.resourceId }}",
 					"operation": "get_exact_value",
 					"path": "records[80]"
 				},
@@ -142,26 +142,26 @@
 			"main": [[{ "node": "Gerar JSON grande", "type": "main", "index": 0 }]]
 		},
 		"Gerar JSON grande": {
-			"main": [[{ "node": "Context Saver Content — Savings", "type": "main", "index": 0 }]]
+			"main": [[{ "node": "Context Saver Content - Savings", "type": "main", "index": 0 }]]
 		},
-		"Context Saver Content — Savings": {
+		"Context Saver Content - Savings": {
 			"main": [[{ "node": "Context Saver Metrics", "type": "main", "index": 0 }]]
 		},
 		"Context Saver Metrics": {
-			"main": [[{ "node": "Agente — resposta exata", "type": "main", "index": 0 }]]
+			"main": [[{ "node": "Agente resposta exata", "type": "main", "index": 0 }]]
 		},
 		"Gemini 2.5 Flash": {
 			"ai_languageModel": [
-				[{ "node": "Context Saver Model — Savings", "type": "ai_languageModel", "index": 0 }]
+				[{ "node": "Context Saver Model - Savings", "type": "ai_languageModel", "index": 0 }]
 			]
 		},
-		"Context Saver Model — Savings": {
+		"Context Saver Model - Savings": {
 			"ai_languageModel": [
-				[{ "node": "Agente — resposta exata", "type": "ai_languageModel", "index": 0 }]
+				[{ "node": "Agente resposta exata", "type": "ai_languageModel", "index": 0 }]
 			]
 		},
 		"Context Saver Retriever": {
-			"ai_tool": [[{ "node": "Agente — resposta exata", "type": "ai_tool", "index": 0 }]]
+			"ai_tool": [[{ "node": "Agente resposta exata", "type": "ai_tool", "index": 0 }]]
 		}
 	},
 	"settings": {
