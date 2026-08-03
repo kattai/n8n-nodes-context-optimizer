@@ -1,8 +1,8 @@
 {
 	"node": "n8n-nodes-context-optimizer.optimizedChatModel",
-	"nodeVersion": "2.0",
+	"nodeVersion": "3.0",
 	"codexVersion": "1.0",
-	"details": "Context Saver Model reduces repeated history and virtualizes large recoverable tool results before any connected AI Agent calls its provider.",
+	"details": "Agent Optimizer reduces repeated prompts, history, tool schemas, and recoverable tool results before any connected AI Agent calls its provider.",
 	"categories": ["AI"],
 	"resources": {
 		"primaryDocumentation": [

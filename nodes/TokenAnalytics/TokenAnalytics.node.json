@@ -1,8 +1,8 @@
 {
 	"node": "n8n-nodes-context-optimizer.tokenAnalytics",
-	"nodeVersion": "2.0",
+	"nodeVersion": "3.0",
 	"codexVersion": "1.0",
-	"details": "Context Saver Metrics separates eligible reduction, full-request savings, provider-reported usage, net savings, overhead, and recommendations.",
+	"details": "Savings Report automatically totals every Agent Optimizer call in the current execution and separates estimated, provider-reported, and net savings.",
 	"categories": ["Data & Transformation"],
 	"resources": {
 		"primaryDocumentation": [

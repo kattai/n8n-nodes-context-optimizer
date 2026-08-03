@@ -8,6 +8,8 @@ import {
 import { ContextStore } from '../../nodes/ContextStore/ContextStore.node';
 import { OptimizedChatModel } from '../../nodes/OptimizedChatModel/OptimizedChatModel.node';
 import { TokenAnalytics } from '../../nodes/TokenAnalytics/TokenAnalytics.node';
+import { AgentHandoff } from '../../nodes/AgentHandoff/AgentHandoff.node';
+import { ContextSaver } from '../../nodes/ContextSaver/ContextSaver.node';
 import { resolveNodeCacheStrategy } from '../../src/cache/node-options';
 
 function property(node: { description: { properties: Array<{ name: string }> } }, name: string) {
@@ -19,16 +21,48 @@ function properties(node: { description: { properties: Array<{ name: string }> }
 }
 
 describe('Token Saver node descriptions', () => {
-	it('uses one cohesive product name across all six nodes', () => {
-		expect(new OptimizedChatModel().description.displayName).toBe('Context Saver Model');
-		expect(new ContextOptimizer().description.displayName).toBe('Context Saver Content');
-		expect(new ContextStore().description.displayName).toBe('Context Saver Store');
-		expect(new ContextRetrieverTool().description.displayName).toBe('Context Saver Retriever');
-		expect(new TokenAnalytics().description.displayName).toBe('Context Saver Metrics');
-		expect(new ContextMemory().description.displayName).toBe('Context Saver Memory');
+	it('keeps the seven focused implementations available internally', () => {
+		const nodes = [
+			new OptimizedChatModel(),
+			new ContextOptimizer(),
+			new ContextStore(),
+			new ContextRetrieverTool(),
+			new TokenAnalytics(),
+			new ContextMemory(),
+			new AgentHandoff(),
+		];
+		expect(nodes.map((node) => node.description.displayName)).toEqual([
+			'Agent Optimizer',
+			'Data Optimizer',
+			'Context Storage',
+			'Exact Lookup',
+			'Savings Report',
+			'Session Memory',
+			'Agent Handoff',
+		]);
 	});
 
-	it('defaults the original five nodes to light version 2 while keeping version 1 loadable', () => {
+	it('publishes one Context Saver node with seven selectable features', () => {
+		const node = new ContextSaver();
+		const resource = property(node, 'resource') as {
+			options: Array<{ name: string; value: string }>;
+		};
+
+		expect(node.description.displayName).toBe('Context Saver');
+		expect(resource.options).toEqual([
+			expect.objectContaining({ name: 'Agent Model', value: 'agentModel' }),
+			expect.objectContaining({ name: 'Data Optimizer', value: 'dataOptimization' }),
+			expect.objectContaining({ name: 'Session Memory', value: 'sessionMemory' }),
+			expect.objectContaining({ name: 'Agent Handoff', value: 'agentHandoff' }),
+			expect.objectContaining({ name: 'Context Storage', value: 'contextStorage' }),
+			expect.objectContaining({ name: 'Exact Lookup', value: 'exactLookup' }),
+			expect.objectContaining({ name: 'Savings Report', value: 'savingsReport' }),
+		]);
+		expect(node.description.inputs).toContain('ai_languageModel');
+		expect(node.description.outputs).toContain('ai_tool');
+	});
+
+	it('keeps legacy versions loadable while defaulting renamed nodes to current versions', () => {
 		for (const node of [
 			new OptimizedChatModel(),
 			new ContextOptimizer(),
@@ -36,10 +70,12 @@ describe('Token Saver node descriptions', () => {
 			new ContextRetrieverTool(),
 			new TokenAnalytics(),
 		]) {
-			expect(node.description.version).toEqual([1, 2]);
-			expect(node.description.defaultVersion).toBe(2);
+			expect(node.description.version).toEqual([1, 2, 3]);
+			expect(node.description.defaultVersion).toBe(3);
 		}
-		expect(new ContextMemory().description.version).toBe(1);
+		expect(new ContextMemory().description.version).toEqual([1, 2]);
+		expect(new ContextMemory().description.defaultVersion).toBe(2);
+		expect(new AgentHandoff().description.version).toBe(1);
 	});
 
 	it('exposes explicit session operations without pretending to be native agent memory', () => {
@@ -80,9 +116,9 @@ describe('Token Saver node descriptions', () => {
 			displayOptions: { show: Record<string, unknown> };
 		}>;
 		expect(profile.options.map((entry) => entry.name)).toEqual([
-			'Quality',
+			'Quality First',
 			'Balanced (Recommended)',
-			'Savings',
+			'Maximum Savings',
 			'Custom (Advanced)',
 		]);
 		expect(profile.options.every((entry) => entry.description.length > 30)).toBe(true);
@@ -93,10 +129,10 @@ describe('Token Saver node descriptions', () => {
 			'custom',
 		]);
 		expect(profile.options.find((entry) => entry.value === 'savings')?.description).toContain(
-			'Context Saver Retriever',
+			'Exact Lookup',
 		);
 		expect(legacyProfile.displayOptions.show).toMatchObject({ '@version': [1] });
-		expect(profile.displayOptions.show).toMatchObject({ '@version': [2] });
+		expect(profile.displayOptions.show).toMatchObject({ '@version': [2, 3] });
 		expect(property(chatModel, 'maximumSavingsOptions')).toMatchObject({
 			displayOptions: {
 				show: { behavior: ['optimizeAndMeasure'], profile: ['aggressive', 'savings'] },
@@ -111,7 +147,7 @@ describe('Token Saver node descriptions', () => {
 			displayOptions: { show: Record<string, unknown> };
 			options: Array<{ value: string }>;
 		};
-		expect(profile.displayOptions.show).toEqual({ '@version': [2] });
+		expect(profile.displayOptions.show).toEqual({ '@version': [2, 3] });
 		expect(profile.options.map((entry) => entry.value)).toEqual([
 			'quality',
 			'balanced',
@@ -151,7 +187,7 @@ describe('Token Saver node descriptions', () => {
 			options: Array<{ name: string; default: unknown }>;
 		};
 		expect(options.displayOptions.show).toEqual({
-			'@version': [2],
+			'@version': [2, 3],
 			behavior: ['optimizeAndMeasure'],
 		});
 		expect(options.options.find((entry) => entry.name === 'selectionMode')).toMatchObject({
@@ -209,7 +245,7 @@ describe('Token Saver node descriptions', () => {
 	it('exposes optional Retriever defaults only in version 2', () => {
 		expect(property(new ContextRetrieverTool(), 'toolCallDefaults')).toMatchObject({
 			type: 'collection',
-			displayOptions: { show: { '@version': [2] } },
+			displayOptions: { show: { '@version': [2, 3] } },
 		});
 	});
 
@@ -217,7 +253,7 @@ describe('Token Saver node descriptions', () => {
 		const semantic = property(new ContextOptimizer(), 'semanticOptions');
 		expect(semantic).toMatchObject({
 			type: 'collection',
-			displayOptions: { show: { '@version': [2], useSummarizer: [true] } },
+			displayOptions: { show: { '@version': [2, 3], useSummarizer: [true] } },
 		});
 		const options = semantic.options as Array<{ name: string; default: unknown }>;
 		expect(options.find((entry) => entry.name === 'deduplicate')?.default).toBe(false);
@@ -228,7 +264,7 @@ describe('Token Saver node descriptions', () => {
 	it('defaults Context Saver v2 to strict deterministic verification', () => {
 		expect(property(new ContextOptimizer(), 'qualityLevel')).toMatchObject({
 			default: 'strict',
-			displayOptions: { show: { '@version': [2] } },
+			displayOptions: { show: { '@version': [2, 3] } },
 		});
 		expect(property(new ContextMemory(), 'summarySafety')).toMatchObject({
 			type: 'collection',

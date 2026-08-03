@@ -9,28 +9,42 @@ import {
 	defaultFingerprintDirectory,
 	FileSystemFingerprintRegistry,
 } from '../../src/cache/fingerprint-registry';
+import { RedisFingerprintRegistry } from '../../src/cache/redis-fingerprint-registry';
 import { resolveNodeCacheStrategy } from '../../src/cache/node-options';
 import {
 	defaultStorageDirectory,
-	FileSystemResourceStore,
 } from '../../src/storage/filesystem-store';
+import {
+	createConfiguredResourceStore,
+	type StorageCredentialValues,
+	type StorageProvider,
+} from '../../src/storage/configured-store';
 import {
 	type ModelOptimizationMetrics,
 	wrapLanguageModel,
 } from '../../src/model-wrapper/wrap-language-model';
+import { buildIsolationScope } from '../../src/storage/isolation-scope';
+import { testContextSaverStorageApi } from '../../src/storage/credential-test';
 
 interface MaximumSavingsNodeOptions {
 	allowSecretLikeContent?: boolean;
 	maxPreviewPercent?: number;
 	maxResourceMegabytes?: number;
 	minimumContentTokens?: number;
+	ownerId?: string;
 	scope?: string;
+	sessionId?: string;
 	storageDirectory?: string;
 	targetPreviewPercent?: number;
 	ttlHours?: number;
+	storageProvider?: StorageProvider;
+	redisKeyPrefix?: string;
+	encryptStorage?: boolean;
 }
 
 interface CacheNodeOptions {
+	registryProvider?: 'automatic' | 'filesystem' | 'redis';
+	redisKeyPrefix?: string;
 	fingerprintDirectory?: string;
 	fingerprintTtlHours?: number;
 	maximumFingerprints?: number;
@@ -68,6 +82,9 @@ function hasCompatibleRetriever(
 	execution: ISupplyDataFunctions,
 	scope: string,
 	directory: string,
+	provider: StorageProvider,
+	redisKeyPrefix: string,
+	encryptStorage: boolean,
 ): boolean {
 	const workflowId = execution.getWorkflow().id ?? 'workflow';
 	// n8n's public getChildNodes() currently follows only Main connections.
@@ -94,14 +111,30 @@ function hasCompatibleRetriever(
 				const retrieverDirectory = normalizedDirectory(
 					String(retriever.parameters?.storageDirectory ?? ''),
 				);
-				return retrieverScope === scope && retrieverDirectory === normalizedDirectory(directory);
+				const retrieverProvider = String(
+					retriever.parameters?.storageProvider ?? 'filesystem',
+				) as StorageProvider;
+				const retrieverPrefix = String(
+					retriever.parameters?.redisKeyPrefix ?? 'context-saver',
+				);
+				const retrieverEncryption = Boolean(retriever.parameters?.encryptStorage ?? false);
+				return (
+					retrieverScope === scope &&
+					retrieverProvider === provider &&
+					retrieverEncryption === encryptStorage &&
+					(provider === 'redis'
+						? retrieverPrefix === redisKeyPrefix
+						: retrieverDirectory === normalizedDirectory(directory))
+				);
 			}),
 	);
 }
 
 export class OptimizedChatModel implements INodeType {
+	methods = { credentialTest: { testContextSaverStorageApi } };
+
 	description: INodeTypeDescription = {
-		displayName: 'Context Saver Model',
+		displayName: 'Agent Optimizer',
 		name: 'optimizedChatModel',
 		icon: {
 			light: 'file:optimized-chat-model.svg',
@@ -111,12 +144,13 @@ export class OptimizedChatModel implements INodeType {
 		// @ts-expect-error n8n's public type currently omits the supported false value.
 		usableAsTool: false,
 		group: ['transform'],
-		version: [1, 2],
-		defaultVersion: 2,
+		version: [1, 2, 3],
+		defaultVersion: 3,
 		subtitle: '={{$parameter["behavior"]}}',
-		description: 'Save input tokens before any connected chat model without changing its response',
+		description:
+			'Reduce prompts, history, tool schemas, and tool results before any connected chat model',
 		defaults: {
-			name: 'Context Saver Model',
+			name: 'Agent Optimizer',
 		},
 		inputs: [
 			{
@@ -127,7 +161,16 @@ export class OptimizedChatModel implements INodeType {
 			},
 		],
 		outputs: [NodeConnectionTypes.AiLanguageModel],
-		outputNames: ['Token-Saving Model'],
+		outputNames: ['Optimized Chat Model'],
+		credentials: [
+			{
+				name: 'contextSaverStorageApi',
+				required: false,
+				testedBy: 'testContextSaverStorageApi',
+				displayName: 'Storage and Encryption (Optional)',
+				displayOptions: { show: { '@version': [3] } },
+			},
+		],
 		properties: [
 			{
 				displayName: 'Mode',
@@ -174,7 +217,7 @@ export class OptimizedChatModel implements INodeType {
 						name: 'Maximum Savings',
 						value: 'aggressive',
 						description:
-							'Store large tool results outside the prompt and keep a relevant preview; requires Context Saver Retriever for exact data',
+							'Store large tool results outside the prompt and keep a relevant preview; requires Exact Lookup for exact data',
 						action: 'Maximize token savings',
 					},
 					{
@@ -198,7 +241,7 @@ export class OptimizedChatModel implements INodeType {
 				noDataExpression: true,
 				options: [
 					{
-						name: 'Quality',
+						name: 'Quality First',
 						value: 'quality',
 						description:
 							'Typical eligible saving: 15–35%. Lossless transforms, 12 recent messages, and exact deduplication only.',
@@ -212,10 +255,10 @@ export class OptimizedChatModel implements INodeType {
 						action: 'Balance fidelity and savings',
 					},
 					{
-						name: 'Savings',
+						name: 'Maximum Savings',
 						value: 'savings',
 						description:
-							'Typical eligible saving: 60–85%. Virtualizes large results; connect Context Saver Retriever for exact details.',
+							'Typical eligible saving: 60–85%. Virtualizes large results; connect Exact Lookup for exact details.',
 						action: 'Maximize recoverable savings',
 					},
 					{
@@ -230,7 +273,29 @@ export class OptimizedChatModel implements INodeType {
 				description:
 					'Ranges are typical savings on eligible context, not guarantees for the full request',
 				displayOptions: {
-					show: { '@version': [2], behavior: ['optimizeAndMeasure'] },
+					show: { '@version': [2, 3], behavior: ['optimizeAndMeasure'] },
+				},
+			},
+			{
+				displayName: 'Adaptive Quality Protection',
+				name: 'adaptiveOptimization',
+				type: 'boolean',
+				default: true,
+				description:
+					'Whether to automatically use a safer effective profile for code, exact quotes, active tool calls, structured output, or unavailable retrieval',
+				displayOptions: {
+					show: { '@version': [3], behavior: ['optimizeAndMeasure'] },
+				},
+			},
+			{
+				displayName: 'Optimize Repeated Prompt Rules',
+				name: 'compileSystemPrompt',
+				type: 'boolean',
+				default: true,
+				description:
+					'Whether to remove exact repeated system-prompt blocks while preserving unique rules, code, IDs, numbers, dates, and protected blocks',
+				displayOptions: {
+					show: { '@version': [3], behavior: ['optimizeAndMeasure'] },
 				},
 			},
 			{
@@ -254,6 +319,14 @@ export class OptimizedChatModel implements INodeType {
 						default: false,
 						description:
 							'Whether to store content that resembles API keys, tokens, passwords, or private keys; leave disabled unless storage is secured',
+					},
+					{
+						displayName: 'Encrypt Stored Content',
+						name: 'encryptStorage',
+						type: 'boolean',
+						default: false,
+						description:
+							'Whether to use the AES-256-GCM key from Context Saver Storage API credentials',
 					},
 					{
 						displayName: 'Maximum Preview (%)',
@@ -282,12 +355,33 @@ export class OptimizedChatModel implements INodeType {
 							'Smaller tool results stay inline because storage and retrieval would cost more than they save',
 					},
 					{
+						displayName: 'Owner ID',
+						name: 'ownerId',
+						type: 'string',
+						default: '={{ $json.ownerId || $json.userId || "" }}',
+						description: 'Optional user or tenant boundary; must match Exact Lookup',
+					},
+					{
+						displayName: 'Redis Key Prefix',
+						name: 'redisKeyPrefix',
+						type: 'string',
+						default: 'context-saver',
+						description: 'Must match Exact Lookup',
+						displayOptions: { show: { storageProvider: ['redis'] } },
+					},
+					{
 						displayName: 'Scope',
 						name: 'scope',
 						type: 'string',
 						default: '={{ $workflow.id }}',
-						description:
-							'Isolation key; must exactly match the Context Saver Retriever connected to the same agent',
+						description: 'Workflow isolation key; must match Exact Lookup',
+					},
+					{
+						displayName: 'Session ID',
+						name: 'sessionId',
+						type: 'string',
+						default: '={{ $json.sessionId || $json.sessionKey || "" }}',
+						description: 'Optional conversation boundary; must match Exact Lookup',
 					},
 					{
 						displayName: 'Storage Directory',
@@ -296,7 +390,28 @@ export class OptimizedChatModel implements INodeType {
 						default: '',
 						placeholder: defaultStorageDirectory(),
 						description:
-							'Self-hosted path shared with Context Saver Retriever; queue workers need the same shared directory',
+							'Self-hosted path shared with Exact Lookup; queue workers need the same shared directory',
+					},
+					{
+						displayName: 'Storage Provider',
+						name: 'storageProvider',
+						type: 'options',
+						noDataExpression: true,
+						options: [
+							{
+								name: 'Local or Shared Filesystem',
+								value: 'filesystem',
+								description: 'Zero-credential storage; use shared path for queue workers',
+								action: 'Use filesystem storage',
+							},
+							{
+								name: 'Redis (High Concurrency)',
+								value: 'redis',
+								description: 'Shared TTL storage for many users and queue workers',
+								action: 'Use Redis storage',
+							},
+						],
+						default: 'filesystem',
 					},
 					{
 						displayName: 'Target Preview (%)',
@@ -324,7 +439,7 @@ export class OptimizedChatModel implements INodeType {
 				placeholder: 'Add Setting',
 				default: {},
 				displayOptions: {
-					show: { '@version': [2], behavior: ['optimizeAndMeasure'] },
+					show: { '@version': [2, 3], behavior: ['optimizeAndMeasure'] },
 				},
 				description:
 					'Reduce schemas sent on each Agent call; low confidence and structured output always keep all tools',
@@ -498,6 +613,37 @@ export class OptimizedChatModel implements INodeType {
 						description:
 							'Ignore cache policy overhead for prefixes too small to provide meaningful savings',
 					},
+					{
+						displayName: 'Redis Key Prefix',
+						name: 'redisKeyPrefix',
+						type: 'string',
+						default: 'context-saver',
+						description: 'Namespace for shared cache fingerprints',
+					},
+					{
+						displayName: 'Registry Provider',
+						name: 'registryProvider',
+						type: 'options',
+						noDataExpression: true,
+						options: [
+							{
+								name: 'Automatic (Recommended)',
+								value: 'automatic',
+								description: 'Use Redis with Redis context storage; otherwise use filesystem',
+							},
+							{
+								name: 'Filesystem',
+								value: 'filesystem',
+								description: 'Keep fingerprint metadata on this n8n host',
+							},
+							{
+								name: 'Redis',
+								value: 'redis',
+								description: 'Share cache observations across workers and executions',
+							},
+						],
+						default: 'automatic',
+					},
 				],
 			},
 			{
@@ -546,6 +692,16 @@ export class OptimizedChatModel implements INodeType {
 		const behavior = this.getNodeParameter('behavior', itemIndex, 'optimizeAndMeasure') as
 			| 'optimizeAndMeasure'
 			| 'measureOnly';
+		const adaptiveOptimization = this.getNodeParameter(
+			'adaptiveOptimization',
+			itemIndex,
+			true,
+		) as boolean;
+		const compileSystemPrompt = this.getNodeParameter(
+			'compileSystemPrompt',
+			itemIndex,
+			true,
+		) as boolean;
 		const custom = this.getNodeParameter('customProfile', itemIndex, {}) as CustomProfileConfig;
 		const maximumSavingsOptions = this.getNodeParameter(
 			'maximumSavingsOptions',
@@ -562,11 +718,44 @@ export class OptimizedChatModel implements INodeType {
 			this.getNode().parameters as Record<string, unknown>,
 		);
 		const workflowId = this.getWorkflow().id ?? 'workflow';
-		const scope = connectedScope(maximumSavingsOptions.scope, workflowId) ?? workflowId;
+		const baseScope = connectedScope(maximumSavingsOptions.scope, workflowId) ?? workflowId;
+		const scope = buildIsolationScope(
+			baseScope,
+			maximumSavingsOptions.sessionId,
+			maximumSavingsOptions.ownerId,
+		);
 		const storageDirectory =
 			maximumSavingsOptions.storageDirectory?.trim() || defaultStorageDirectory();
+		const storageProvider = maximumSavingsOptions.storageProvider ?? 'filesystem';
+		const redisKeyPrefix = maximumSavingsOptions.redisKeyPrefix?.trim() || 'context-saver';
+		const encryptStorage = maximumSavingsOptions.encryptStorage ?? false;
+		const cacheRegistryProvider = cacheOptions.registryProvider ?? 'automatic';
+		const useRedisCache =
+			this.getNode().typeVersion >= 3 &&
+			cacheStrategy !== 'ignore_cache_signals' &&
+			(cacheRegistryProvider === 'redis' ||
+				(cacheRegistryProvider === 'automatic' && storageProvider === 'redis'));
 		const retrieverAvailable =
-			isSavingsProfile(profile) && hasCompatibleRetriever(this, scope, storageDirectory);
+			isSavingsProfile(profile) &&
+			hasCompatibleRetriever(
+				this,
+				baseScope,
+				storageDirectory,
+				storageProvider,
+				redisKeyPrefix,
+				encryptStorage,
+			);
+		let storageCredentials: StorageCredentialValues = {};
+		if (
+			this.getNode().typeVersion >= 3 &&
+			((isSavingsProfile(profile) && (storageProvider === 'redis' || encryptStorage)) ||
+				useRedisCache)
+		) {
+			storageCredentials = (await this.getCredentials(
+				'contextSaverStorageApi',
+				itemIndex,
+			)) as StorageCredentialValues;
+		}
 		const maximumPreviewPercent = Math.min(
 			30,
 			Math.max(10, maximumSavingsOptions.maxPreviewPercent ?? 30),
@@ -579,11 +768,35 @@ export class OptimizedChatModel implements INodeType {
 			cacheOptions.fingerprintDirectory?.trim() || defaultFingerprintDirectory();
 		const modelName = (model as { constructor?: { name?: string } }).constructor?.name ?? 'model';
 		const cacheScope = `${workflowId}:${this.getNode().name}:${modelName}`;
+		const redisUrl = String(storageCredentials.redisUrl ?? '').trim();
+		if (useRedisCache && !redisUrl) {
+			throw new NodeOperationError(
+				this.getNode(),
+				'Select Context Saver Storage API credentials with a Redis URL for the cache registry',
+				{ itemIndex },
+			);
+		}
+		const cacheRegistry = useRedisCache
+			? new RedisFingerprintRegistry(
+					{
+						url: redisUrl,
+						username: String(storageCredentials.redisUsername ?? '').trim() || undefined,
+						password: String(storageCredentials.redisPassword ?? '').trim() || undefined,
+						keyPrefix: cacheOptions.redisKeyPrefix?.trim() || 'context-saver',
+					},
+					{ ttlHours: cacheOptions.fingerprintTtlHours ?? 24 },
+				)
+			: new FileSystemFingerprintRegistry(fingerprintDirectory, {
+					ttlHours: cacheOptions.fingerprintTtlHours ?? 24,
+					maxEntries: cacheOptions.maximumFingerprints ?? 5000,
+				});
 
 		return {
 			response: wrapLanguageModel(model as object, {
 				profile,
 				custom,
+				adaptiveOptimization: this.getNode().typeVersion >= 3 ? adaptiveOptimization : false,
+				compileSystemPrompt: this.getNode().typeVersion >= 3 ? compileSystemPrompt : false,
 				optimizeMessages: behavior !== 'measureOnly',
 				...(behavior !== 'measureOnly'
 					? {
@@ -601,18 +814,16 @@ export class OptimizedChatModel implements INodeType {
 							cacheAware: {
 								strategy: cacheStrategy,
 								...(cacheStrategy !== 'ignore_cache_signals'
-									? {
-											registry: new FileSystemFingerprintRegistry(fingerprintDirectory, {
-												ttlHours: cacheOptions.fingerprintTtlHours ?? 24,
-												maxEntries: cacheOptions.maximumFingerprints ?? 5000,
-											}),
-										}
+									? { registry: cacheRegistry }
 									: {}),
 								scope: cacheScope,
 								minimumRepetitions: cacheOptions.minimumRepetitions ?? 2,
 								minimumStablePrefixTokens: cacheOptions.minimumStablePrefixTokens ?? 2048,
-								registryScope:
-									process.env.EXECUTIONS_MODE === 'queue' ? 'worker_local' : 'process_local',
+								registryScope: useRedisCache
+									? 'shared_redis'
+									: process.env.EXECUTIONS_MODE === 'queue'
+										? 'worker_local'
+										: 'process_local',
 							},
 						}
 					: {}),
@@ -620,10 +831,16 @@ export class OptimizedChatModel implements INodeType {
 					? {
 							maximumSavings: {
 								retrieverAvailable,
-								store: new FileSystemResourceStore(
-									storageDirectory,
-									(maximumSavingsOptions.maxResourceMegabytes ?? 10) * 1024 * 1024,
-								),
+								store: createConfiguredResourceStore({
+									provider:
+										this.getNode().typeVersion >= 3 ? storageProvider : 'filesystem',
+									directory: storageDirectory,
+									maxResourceBytes:
+										(maximumSavingsOptions.maxResourceMegabytes ?? 10) * 1024 * 1024,
+									encrypt: this.getNode().typeVersion >= 3 && encryptStorage,
+									redisKeyPrefix,
+									credentials: storageCredentials,
+								}),
 								scope,
 								ttlSeconds: (maximumSavingsOptions.ttlHours ?? 24) * 3600,
 								thresholdTokens: maximumSavingsOptions.minimumContentTokens ?? 2000,

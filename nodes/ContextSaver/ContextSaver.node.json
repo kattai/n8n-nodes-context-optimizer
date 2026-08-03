@@ -1,0 +1,28 @@
+{
+	"node": "n8n-nodes-context-optimizer.contextSaver",
+	"nodeVersion": "3.0",
+	"codexVersion": "1.0",
+	"details": "Context Saver groups model optimization, data compression, compact memory, agent handoff, exact storage and retrieval, and savings reporting in one node.",
+	"categories": ["AI", "Data & Transformation"],
+	"alias": [
+		"Agent Handoff",
+		"Agent Model",
+		"Context Storage",
+		"Data Optimizer",
+		"Exact Lookup",
+		"Savings Report",
+		"Session Memory",
+		"Token Optimizer"
+	],
+	"resources": {
+		"primaryDocumentation": [
+			{
+				"url": "https://github.com/kattai/n8n-nodes-context-optimizer"
+			}
+		]
+	},
+	"subcategories": {
+		"AI": ["Language Models", "Tools", "Root Nodes"],
+		"Data & Transformation": ["Text"]
+	}
+}

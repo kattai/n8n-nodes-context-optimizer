@@ -19,9 +19,16 @@ import {
 } from '../../src/retrieval/retrieve-context';
 import {
 	defaultStorageDirectory,
-	FileSystemResourceStore,
 } from '../../src/storage/filesystem-store';
+import {
+	createConfiguredResourceStore,
+	type StorageCredentialValues,
+	type StorageProvider,
+} from '../../src/storage/configured-store';
 import { compactRetrievalResult } from '../../src/output/format-node-output';
+import { recordExecutionTelemetry } from '../../src/analytics/execution-telemetry-registry';
+import { buildIsolationScope } from '../../src/storage/isolation-scope';
+import { testContextSaverStorageApi } from '../../src/storage/credential-test';
 
 function list(value: string): string[] {
 	return value
@@ -125,7 +132,7 @@ const toolInputSchema = z.object({
 		.string()
 		.min(1)
 		.optional()
-		.describe('Resource ID returned by Context Saver Store or Content'),
+		.describe('Resource ID returned by Context Storage or Data Optimizer'),
 	query: z.string().min(1).optional().describe('Terms to locate with search_context'),
 	path,
 	filters: z.record(primitive).optional().describe('Equality filters used by filter_records'),
@@ -223,24 +230,57 @@ function nextExecutionState(executionId: string, nodeName: string): ExecutionRet
 }
 
 export class ContextRetrieverTool implements INodeType {
+	methods = { credentialTest: { testContextSaverStorageApi } };
+
 	description: INodeTypeDescription = {
-		displayName: 'Context Saver Retriever',
+		displayName: 'Exact Lookup',
 		name: 'contextRetrieverTool',
 		icon: {
 			light: 'file:context-retriever-tool.svg',
 			dark: 'file:context-retriever-tool.dark.svg',
 		},
 		group: ['transform'],
-		version: [1, 2],
-		defaultVersion: 2,
+		version: [1, 2, 3],
+		defaultVersion: 3,
 		description:
 			'Let an AI Agent recover exact details from content virtualized outside its prompt',
-		defaults: { name: 'Context Saver Retriever' },
+		defaults: { name: 'Exact Lookup' },
 		subtitle: '={{$parameter["scope"]}}',
 		inputs: [],
 		outputs: [NodeConnectionTypes.AiTool],
 		outputNames: ['Tool'],
+		credentials: [
+			{
+				name: 'contextSaverStorageApi',
+				required: false,
+				testedBy: 'testContextSaverStorageApi',
+				displayName: 'Storage and Encryption (Optional)',
+				displayOptions: { show: { '@version': [3] } },
+			},
+		],
 		properties: [
+			{
+				displayName: 'Storage Provider',
+				name: 'storageProvider',
+				type: 'options',
+				noDataExpression: true,
+				options: [
+					{
+						name: 'Local or Shared Filesystem',
+						value: 'filesystem',
+						description: 'Read resources from the configured filesystem directory',
+						action: 'Read filesystem resources',
+					},
+					{
+						name: 'Redis (High Concurrency)',
+						value: 'redis',
+						description: 'Read shared resources created in Redis by other workers',
+						action: 'Read Redis resources',
+					},
+				],
+				default: 'filesystem',
+				displayOptions: { show: { '@version': [3] } },
+			},
 			{
 				displayName: 'Tool Description',
 				name: 'toolDescription',
@@ -248,7 +288,7 @@ export class ContextRetrieverTool implements INodeType {
 				typeOptions: { rows: 4 },
 				required: true,
 				default:
-					'Retrieve an exact missing value or record from a Context Saver resource. Use only when the compact context does not contain the required ID, date, amount, field, or record. Never guess missing data.',
+					'Retrieve an exact missing value or record from Context Storage. Use only when compact context lacks a required ID, date, amount, field, or record. Never guess missing data.',
 				description:
 					'Short instruction shown to the agent; keep retrieval rules here instead of the system prompt',
 			},
@@ -258,8 +298,23 @@ export class ContextRetrieverTool implements INodeType {
 				type: 'string',
 				required: true,
 				default: '={{ $workflow.id }}',
-				description:
-					'Isolation key; must exactly match Context Saver Store or Content Virtualization',
+				description: 'Workflow isolation key; must exactly match Context Storage',
+			},
+			{
+				displayName: 'Session ID',
+				name: 'sessionId',
+				type: 'string',
+				default: '={{ $json.sessionId || $json.sessionKey || "" }}',
+				displayOptions: { show: { '@version': [3] } },
+				description: 'Optional conversation boundary; must match Context Storage',
+			},
+			{
+				displayName: 'Owner ID',
+				name: 'ownerId',
+				type: 'string',
+				default: '={{ $json.ownerId || $json.userId || "" }}',
+				displayOptions: { show: { '@version': [3] } },
+				description: 'Optional user or tenant boundary; must match Context Storage',
 			},
 			{
 				displayName: 'Storage Directory',
@@ -270,12 +325,28 @@ export class ContextRetrieverTool implements INodeType {
 				description: 'Self-hosted path; must match the Store or Content Virtualization directory',
 			},
 			{
+				displayName: 'Redis Key Prefix',
+				name: 'redisKeyPrefix',
+				type: 'string',
+				default: 'context-saver',
+				description: 'Must match Context Storage or Agent Optimizer',
+				displayOptions: { show: { '@version': [3], storageProvider: ['redis'] } },
+			},
+			{
+				displayName: 'Encrypted Storage',
+				name: 'encryptStorage',
+				type: 'boolean',
+				default: false,
+				description: 'Whether to use the AES-256-GCM key from Context Saver Storage API credentials',
+				displayOptions: { show: { '@version': [3] } },
+			},
+			{
 				displayName: 'Tool Call Defaults',
 				name: 'toolCallDefaults',
 				type: 'collection',
 				placeholder: 'Add Default',
 				default: {},
-				displayOptions: { show: { '@version': [2] } },
+				displayOptions: { show: { '@version': [2, 3] } },
 				description:
 					'Optional workflow-known values used only when the model omits them; useful for a Retriever dedicated to one stored resource',
 				options: [
@@ -379,8 +450,17 @@ export class ContextRetrieverTool implements INodeType {
 		const items = this.getInputData();
 		const directory = this.getNodeParameter('storageDirectory', 0, '') as string;
 		const maximumCalls = this.getNodeParameter('maxCalls', 0, 5) as number;
+		const scope = buildIsolationScope(
+			this.getNodeParameter('scope', 0, this.getWorkflow().id) as string,
+			this.getNode().typeVersion >= 3
+				? (this.getNodeParameter('sessionId', 0, '') as string)
+				: '',
+			this.getNode().typeVersion >= 3
+				? (this.getNodeParameter('ownerId', 0, '') as string)
+				: '',
+		);
 		const policy: RetrievalPolicy = {
-			scope: this.getNodeParameter('scope', 0, this.getWorkflow().id) as string,
+			scope,
 			maxResults: this.getNodeParameter('maxResults', 0, 20) as number,
 			maxTokens: this.getNodeParameter('maxTokens', 0, 4000) as number,
 			maxExecutionTokens: this.getNodeParameter('maxExecutionTokens', 0, 12000) as number,
@@ -388,7 +468,19 @@ export class ContextRetrieverTool implements INodeType {
 			blockedFields: list(this.getNodeParameter('blockedFields', 0, '') as string),
 			allowFullOriginal: this.getNodeParameter('allowFullOriginal', 0, false) as boolean,
 		};
-		const store = new FileSystemResourceStore(directory.trim() || defaultStorageDirectory());
+		const provider = this.getNodeParameter('storageProvider', 0, 'filesystem') as StorageProvider;
+		const encryptStorage = this.getNodeParameter('encryptStorage', 0, false) as boolean;
+		let credentials: StorageCredentialValues = {};
+		if (this.getNode().typeVersion >= 3 && (provider === 'redis' || encryptStorage)) {
+			credentials = (await this.getCredentials('contextSaverStorageApi', 0)) as StorageCredentialValues;
+		}
+		const store = createConfiguredResourceStore({
+			provider: this.getNode().typeVersion >= 3 ? provider : 'filesystem',
+			directory: directory.trim() || defaultStorageDirectory(),
+			encrypt: this.getNode().typeVersion >= 3 && encryptStorage,
+			redisKeyPrefix: this.getNodeParameter('redisKeyPrefix', 0, 'context-saver') as string,
+			credentials,
+		});
 		const defaults = toolRequestDefaults(this.getNodeParameter('toolCallDefaults', 0, {}));
 		const returnData: INodeExecutionData[] = [];
 		for (let itemIndex = 0; itemIndex < items.length; itemIndex++) {
@@ -419,6 +511,17 @@ export class ContextRetrieverTool implements INodeType {
 										},
 									}
 								: await retrieveContext(store, request, policy, state);
+						recordExecutionTelemetry({
+							executionId: this.getExecutionId(),
+							nodeName: this.getNode().name,
+							component: 'exact_lookup',
+							recordedAt: new Date().toISOString(),
+							overheadTokens: result.tokensEstimated ?? 0,
+							resourceIds: [request.resourceId],
+							diagnostics: result.ok
+								? [request.operation]
+								: [result.error?.code ?? 'lookup_error'],
+						});
 						return JSON.stringify(compactRetrievalResult(result));
 					},
 				});
@@ -448,8 +551,17 @@ export class ContextRetrieverTool implements INodeType {
 	async supplyData(this: ISupplyDataFunctions, itemIndex: number): Promise<SupplyData> {
 		const directory = this.getNodeParameter('storageDirectory', itemIndex, '') as string;
 		const maximumCalls = this.getNodeParameter('maxCalls', itemIndex, 5) as number;
+		const scope = buildIsolationScope(
+			this.getNodeParameter('scope', itemIndex, this.getWorkflow().id) as string,
+			this.getNode().typeVersion >= 3
+				? (this.getNodeParameter('sessionId', itemIndex, '') as string)
+				: '',
+			this.getNode().typeVersion >= 3
+				? (this.getNodeParameter('ownerId', itemIndex, '') as string)
+				: '',
+		);
 		const policy: RetrievalPolicy = {
-			scope: this.getNodeParameter('scope', itemIndex, this.getWorkflow().id) as string,
+			scope,
 			maxResults: this.getNodeParameter('maxResults', itemIndex, 20) as number,
 			maxTokens: this.getNodeParameter('maxTokens', itemIndex, 4000) as number,
 			maxExecutionTokens: this.getNodeParameter('maxExecutionTokens', itemIndex, 12000) as number,
@@ -457,7 +569,34 @@ export class ContextRetrieverTool implements INodeType {
 			blockedFields: list(this.getNodeParameter('blockedFields', itemIndex, '') as string),
 			allowFullOriginal: this.getNodeParameter('allowFullOriginal', itemIndex, false) as boolean,
 		};
-		const store = new FileSystemResourceStore(directory.trim() || defaultStorageDirectory());
+		const provider = this.getNodeParameter(
+			'storageProvider',
+			itemIndex,
+			'filesystem',
+		) as StorageProvider;
+		const encryptStorage = this.getNodeParameter(
+			'encryptStorage',
+			itemIndex,
+			false,
+		) as boolean;
+		let credentials: StorageCredentialValues = {};
+		if (this.getNode().typeVersion >= 3 && (provider === 'redis' || encryptStorage)) {
+			credentials = (await this.getCredentials(
+				'contextSaverStorageApi',
+				itemIndex,
+			)) as StorageCredentialValues;
+		}
+		const store = createConfiguredResourceStore({
+			provider: this.getNode().typeVersion >= 3 ? provider : 'filesystem',
+			directory: directory.trim() || defaultStorageDirectory(),
+			encrypt: this.getNode().typeVersion >= 3 && encryptStorage,
+			redisKeyPrefix: this.getNodeParameter(
+				'redisKeyPrefix',
+				itemIndex,
+				'context-saver',
+			) as string,
+			credentials,
+		});
 		const defaults = toolRequestDefaults(this.getNodeParameter('toolCallDefaults', itemIndex, {}));
 		let callCount = 0;
 		const budgetState: RetrievalBudgetState = { tokensUsed: 0 };
@@ -498,6 +637,17 @@ export class ContextRetrieverTool implements INodeType {
 								},
 							}
 						: await retrieveContext(store, request as RetrievalRequest, policy, budgetState);
+				recordExecutionTelemetry({
+					executionId: this.getExecutionId(),
+					nodeName: this.getNode().name,
+					component: 'exact_lookup',
+					recordedAt: new Date().toISOString(),
+					overheadTokens: result.tokensEstimated ?? 0,
+					resourceIds: [request.resourceId],
+					diagnostics: result.ok
+						? [request.operation]
+						: [result.error?.code ?? 'lookup_error'],
+				});
 				this.addOutputData(NodeConnectionTypes.AiTool, trace, [
 					[
 						{

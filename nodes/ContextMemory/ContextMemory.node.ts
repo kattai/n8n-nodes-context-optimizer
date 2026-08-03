@@ -7,8 +7,16 @@ import type {
 } from 'n8n-workflow';
 import { NodeConnectionTypes, NodeOperationError } from 'n8n-workflow';
 import { defaultMemoryDirectory, FileSystemMemoryManager } from '../../src/memory/memory-manager';
+import { RedisMemoryPersistence } from '../../src/memory/persistence';
 import type { MemoryMessageInput, UpdateMemorySessionInput } from '../../src/memory/types';
 import { memoryArray, memoryObject } from '../../src/memory/node-input';
+import type {
+	StorageCredentialValues,
+	StorageProvider,
+} from '../../src/storage/configured-store';
+import { recordExecutionTelemetry } from '../../src/analytics/execution-telemetry-registry';
+import { buildIsolationScope } from '../../src/storage/isolation-scope';
+import { testContextSaverStorageApi } from '../../src/storage/credential-test';
 
 type MemoryOperation = 'build' | 'delete' | 'inspect' | 'purgeExpired' | 'update';
 
@@ -20,8 +28,10 @@ function profileWindow(profile: string, customWindow: number): number {
 }
 
 export class ContextMemory implements INodeType {
+	methods = { credentialTest: { testContextSaverStorageApi } };
+
 	description: INodeTypeDescription = {
-		displayName: 'Context Saver Memory',
+		displayName: 'Session Memory',
 		name: 'contextMemory',
 		icon: {
 			light: 'file:context-memory.svg',
@@ -30,14 +40,46 @@ export class ContextMemory implements INodeType {
 		// @ts-expect-error n8n's public type currently omits the supported false value.
 		usableAsTool: false,
 		group: ['transform'],
-		version: 1,
+		version: [1, 2],
+		defaultVersion: 2,
 		subtitle: '={{$parameter["operation"]}}',
 		description:
 			'Keep current facts and recent context small while preserving older session history outside the AI prompt',
-		defaults: { name: 'Context Saver Memory' },
+		defaults: { name: 'Session Memory' },
 		inputs: [NodeConnectionTypes.Main],
 		outputs: [NodeConnectionTypes.Main],
+		credentials: [
+			{
+				name: 'contextSaverStorageApi',
+				required: false,
+				testedBy: 'testContextSaverStorageApi',
+				displayName: 'Storage and Encryption (Optional)',
+				displayOptions: { show: { '@version': [2] } },
+			},
+		],
 		properties: [
+			{
+				displayName: 'Storage Provider',
+				name: 'storageProvider',
+				type: 'options',
+				noDataExpression: true,
+				options: [
+					{
+						name: 'Local or Shared Filesystem',
+						value: 'filesystem',
+						description: 'Simple local storage; use a shared path when n8n has multiple workers',
+						action: 'Keep sessions on filesystem',
+					},
+					{
+						name: 'Redis (Recommended for Production)',
+						value: 'redis',
+						description: 'Shared TTL storage for queue mode and many simultaneous conversations',
+						action: 'Keep sessions in Redis',
+					},
+				],
+				default: 'filesystem',
+				displayOptions: { show: { '@version': [2] } },
+			},
 			{
 				displayName: 'Operation',
 				name: 'operation',
@@ -97,6 +139,17 @@ export class ContextMemory implements INodeType {
 				description: 'Isolation boundary; equal session keys in different scopes never share data',
 			},
 			{
+				displayName: 'Owner ID',
+				name: 'ownerId',
+				type: 'string',
+				default: '={{ $json.ownerId || $json.userId || "" }}',
+				displayOptions: {
+					show: { '@version': [2] },
+					hide: { operation: ['purgeExpired'] },
+				},
+				description: 'Optional user or tenant boundary that prevents shared-session access',
+			},
+			{
 				displayName: 'Memory Profile',
 				name: 'profile',
 				type: 'options',
@@ -104,7 +157,7 @@ export class ContextMemory implements INodeType {
 				displayOptions: { show: { operation: ['update'] } },
 				options: [
 					{
-						name: 'Quality',
+						name: 'Quality First',
 						value: 'quality',
 						description: 'Keep the last 12 messages intact for maximum conversational continuity',
 					},
@@ -114,7 +167,7 @@ export class ContextMemory implements INodeType {
 						description: 'Keep the last 6 messages and archive older messages outside the prompt',
 					},
 					{
-						name: 'Savings',
+						name: 'Maximum Savings',
 						value: 'savings',
 						description:
 							'Keep the last 3 messages while corrections and pending work remain protected',
@@ -235,7 +288,7 @@ export class ContextMemory implements INodeType {
 				default: '={{ $json.archivedResources || [] }}',
 				displayOptions: { show: { operation: ['update'] } },
 				description:
-					'Context Saver resource IDs kept as small references so exact original data remains recoverable',
+					'Context Storage resource IDs kept as small references so exact original data remains recoverable',
 			},
 			{
 				displayName: 'Session TTL (Hours)',
@@ -252,7 +305,24 @@ export class ContextMemory implements INodeType {
 				type: 'string',
 				default: '',
 				placeholder: defaultMemoryDirectory(),
+				displayOptions: { hide: { storageProvider: ['redis'] } },
 				description: 'Self-hosted storage path; empty uses the n8n user folder',
+			},
+			{
+				displayName: 'Redis Key Prefix',
+				name: 'redisKeyPrefix',
+				type: 'string',
+				default: 'context-saver',
+				displayOptions: { show: { '@version': [2], storageProvider: ['redis'] } },
+				description: 'Namespace used to keep this installation separate inside Redis',
+			},
+			{
+				displayName: 'Encrypt Stored Sessions',
+				name: 'encryptStorage',
+				type: 'boolean',
+				default: false,
+				displayOptions: { show: { '@version': [2] } },
+				description: 'Whether to encrypt compressed session data with AES-256-GCM before storage',
 			},
 			{
 				displayName: 'Maximum Session Size (MB)',
@@ -293,20 +363,71 @@ export class ContextMemory implements INodeType {
 
 		for (let itemIndex = 0; itemIndex < items.length; itemIndex++) {
 			try {
+				const nodeVersion = this.getNode().typeVersion;
 				const operation = this.getNodeParameter('operation', itemIndex) as MemoryOperation;
 				const configuredDirectory = this.getNodeParameter(
 					'storageDirectory',
 					itemIndex,
 					'',
 				) as string;
-				const maxSessionMegabytes = this.getNodeParameter(
+			const maxSessionMegabytes = this.getNodeParameter(
 					'maxSessionMegabytes',
 					itemIndex,
 					2,
 				) as number;
+				const provider = this.getNodeParameter(
+					'storageProvider',
+					itemIndex,
+					'filesystem',
+				) as StorageProvider;
+				const encryptStorage = this.getNodeParameter(
+					'encryptStorage',
+					itemIndex,
+					false,
+				) as boolean;
+				let credentials: StorageCredentialValues = {};
+				if (nodeVersion >= 2 && (provider === 'redis' || encryptStorage)) {
+					credentials = (await this.getCredentials(
+						'contextSaverStorageApi',
+						itemIndex,
+					)) as StorageCredentialValues;
+				}
+				const redisUrl = String(credentials.redisUrl ?? '').trim();
+				if (nodeVersion >= 2 && provider === 'redis' && !redisUrl) {
+					throw new NodeOperationError(
+						this.getNode(),
+						'Select Context Saver Storage API credentials with a Redis URL',
+						{ itemIndex },
+					);
+				}
+				const encryptionKey = encryptStorage
+					? String(credentials.encryptionKey ?? '').trim()
+					: undefined;
+				if (nodeVersion >= 2 && encryptStorage && !encryptionKey) {
+					throw new NodeOperationError(
+						this.getNode(),
+						'Select Context Saver Storage API credentials with an encryption key',
+						{ itemIndex },
+					);
+				}
+				const persistence =
+					nodeVersion >= 2 && provider === 'redis'
+						? new RedisMemoryPersistence({
+								url: redisUrl,
+								username: String(credentials.redisUsername ?? '').trim() || undefined,
+								password: String(credentials.redisPassword ?? '').trim() || undefined,
+								keyPrefix: this.getNodeParameter(
+									'redisKeyPrefix',
+									itemIndex,
+									'context-saver',
+								) as string,
+							})
+						: undefined;
 				const memory = new FileSystemMemoryManager(
 					configuredDirectory.trim() || defaultMemoryDirectory(),
 					maxSessionMegabytes * 1024 * 1024,
+					persistence,
+					nodeVersion >= 2 ? encryptionKey : undefined,
 				);
 				let result: IDataObject;
 
@@ -314,9 +435,24 @@ export class ContextMemory implements INodeType {
 					result = { purged: await memory.purgeExpired() };
 				} else {
 					const sessionKey = this.getNodeParameter('sessionKey', itemIndex) as string;
-					const scope = this.getNodeParameter('scope', itemIndex, this.getWorkflow().id) as string;
+					const scope = buildIsolationScope(
+						this.getNodeParameter('scope', itemIndex, this.getWorkflow().id) as string,
+						'',
+						nodeVersion >= 2
+							? (this.getNodeParameter('ownerId', itemIndex, '') as string)
+							: '',
+					);
 					if (operation === 'build') {
-						result = (await memory.buildContext({ sessionKey, scope })) as unknown as IDataObject;
+						const built = await memory.buildContext({ sessionKey, scope });
+						result = built as unknown as IDataObject;
+						recordExecutionTelemetry({
+							executionId: this.getExecutionId(),
+							nodeName: this.getNode().name,
+							component: 'session_memory',
+							recordedAt: new Date().toISOString(),
+							tokensBefore: built.sourceEstimatedTokens,
+							tokensAfter: built.estimatedTokens,
+						});
 					} else if (operation === 'delete') {
 						result = { sessionKey, scope, deleted: await memory.deleteSession(sessionKey, scope) };
 					} else if (operation === 'inspect') {
@@ -390,6 +526,9 @@ export class ContextMemory implements INodeType {
 								.filter(Boolean),
 						};
 						const updated = await memory.updateSession(update);
+						const built = nodeVersion >= 2
+							? await memory.buildContext({ sessionKey, scope })
+							: undefined;
 						result = {
 							updated: true,
 							sessionKey,
@@ -397,6 +536,14 @@ export class ContextMemory implements INodeType {
 							revision: updated.session.revision,
 							expiresAt: updated.session.expiresAt,
 							warnings: updated.warnings,
+							...(built
+								? {
+									memoryContext: built.context,
+									estimatedTokens: built.estimatedTokens,
+									selectedProfile: profile,
+									effectiveProfile: profile,
+								}
+								: {}),
 							counts: {
 								facts: Object.keys(updated.session.pinnedFacts).length,
 								stateFields: Object.keys(updated.session.structuredState).length,
@@ -408,6 +555,18 @@ export class ContextMemory implements INodeType {
 						};
 						if (this.getNodeParameter('outputDetail', itemIndex, 'simple') === 'detailed') {
 							result.session = updated.session as unknown as IDataObject;
+						}
+						if (built) {
+							recordExecutionTelemetry({
+								executionId: this.getExecutionId(),
+								nodeName: this.getNode().name,
+								component: 'session_memory',
+								recordedAt: new Date().toISOString(),
+								tokensBefore: built.sourceEstimatedTokens,
+								tokensAfter: built.estimatedTokens,
+								selectedProfile: profile,
+								effectiveProfile: profile,
+							});
 						}
 					}
 				}

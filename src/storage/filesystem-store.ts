@@ -9,6 +9,11 @@ import { estimateTokens } from '../core/token-estimator';
 import { createResourceId, assertResourceId } from './resource-id';
 import type { ResourceManifest, ResourceStore, StoredResource, StoreResourceInput } from './types';
 import { containsSecretLikeContent } from '../security/secret-detector';
+import {
+	decryptEnvelope,
+	encryptEnvelope,
+	isEncryptedEnvelope,
+} from '../security/encrypted-envelope';
 
 const gzipAsync = promisify(gzip);
 const gunzipAsync = promisify(gunzip);
@@ -61,6 +66,7 @@ export class FileSystemResourceStore implements ResourceStore {
 	constructor(
 		rootDirectory = defaultStorageDirectory(),
 		private readonly maxResourceBytes = 10 * 1024 * 1024,
+		private readonly encryptionKey?: string,
 	) {
 		this.root = resolve(rootDirectory);
 	}
@@ -99,7 +105,11 @@ export class FileSystemResourceStore implements ResourceStore {
 			throw new Error('Secret-like content is blocked by default');
 		}
 
-		const resourceId = createResourceId(input.content, input.scope);
+		const resourceId = createResourceId(
+			input.content,
+			input.scope,
+			this.encryptionKey ? 'aes-256-gcm' : 'plain',
+		);
 		const dataPath = this.path(resourceId, '.json.gz');
 		const manifestPath = this.path(resourceId, '.manifest.json');
 		const createdAt = new Date();
@@ -118,7 +128,7 @@ export class FileSystemResourceStore implements ResourceStore {
 		const reused =
 			existingManifest?.originalHash === originalHash && existingManifest.scope === input.scope;
 		const manifest: ResourceManifest = {
-			storageVersion: 2,
+			storageVersion: this.encryptionKey ? 3 : 2,
 			resourceId,
 			contentType: input.contentType,
 			originalHash,
@@ -140,11 +150,17 @@ export class FileSystemResourceStore implements ResourceStore {
 			},
 			fields: input.fields,
 			recordCount: input.recordCount,
+			provider: 'filesystem',
+			...(this.encryptionKey ? { encryption: 'aes-256-gcm' as const } : {}),
 		};
 
 		await mkdir(this.root, { recursive: true });
 		if (!(await exists(dataPath))) {
-			await this.writeAtomic(dataPath, await gzipAsync(Buffer.from(input.content, 'utf8')));
+			const compressed = await gzipAsync(Buffer.from(input.content, 'utf8'));
+			await this.writeAtomic(
+				dataPath,
+				this.encryptionKey ? encryptEnvelope(compressed, this.encryptionKey) : compressed,
+			);
 		}
 		await this.writeAtomic(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
 		return manifest;
@@ -174,7 +190,13 @@ export class FileSystemResourceStore implements ResourceStore {
 		const manifest = await this.inspect(resourceId, scope);
 		const path = this.path(resourceId, '.json.gz');
 		try {
-			const compressed = await readFile(path);
+			const stored = await readFile(path);
+			if (isEncryptedEnvelope(stored) && !this.encryptionKey) {
+				throw new Error('Storage encryption key is required for this resource');
+			}
+			const compressed = this.encryptionKey
+				? decryptEnvelope(stored, this.encryptionKey)
+				: stored;
 			const content = (await gunzipAsync(compressed)).toString('utf8');
 			const hash = createHash('sha256').update(content).digest('hex');
 			if (hash !== manifest.originalHash) {

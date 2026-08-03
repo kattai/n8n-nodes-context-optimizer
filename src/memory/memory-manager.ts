@@ -20,6 +20,12 @@ import type {
 	UpdateMemorySessionInput,
 	UpdateMemorySessionResult,
 } from './types';
+import type { MemoryPersistence } from './persistence';
+import {
+	decryptEnvelope,
+	encryptEnvelope,
+	isEncryptedEnvelope,
+} from '../security/encrypted-envelope';
 
 const gzipAsync = promisify(gzip);
 const gunzipAsync = promisify(gunzip);
@@ -125,6 +131,8 @@ export class FileSystemMemoryManager {
 	constructor(
 		rootDirectory = defaultMemoryDirectory(),
 		private readonly maxSessionBytes = 2 * 1024 * 1024,
+		private readonly persistence?: MemoryPersistence,
+		private readonly encryptionKey?: string,
 	) {
 		this.root = resolve(rootDirectory);
 	}
@@ -137,20 +145,38 @@ export class FileSystemMemoryManager {
 		return candidate;
 	}
 
+	private persistenceKey(sessionKey: string, scope: string): string {
+		return memoryId(assertKey(sessionKey, 'sessionKey'), assertKey(scope, 'scope'));
+	}
+
 	private async readOptional(
 		sessionKey: string,
 		scope: string,
 	): Promise<MemorySession | undefined> {
 		const path = this.path(sessionKey, scope);
 		try {
+			const stored = this.persistence
+				? await this.persistence.read(this.persistenceKey(sessionKey, scope))
+				: await readFile(path);
+			if (!stored) return undefined;
+			if (isEncryptedEnvelope(stored) && !this.encryptionKey) {
+				throw new Error('Storage encryption key is required for this memory session');
+			}
+			const compressed = this.encryptionKey
+				? decryptEnvelope(stored, this.encryptionKey)
+				: stored;
 			const session = JSON.parse(
-				(await gunzipAsync(await readFile(path))).toString('utf8'),
+				(await gunzipAsync(compressed)).toString('utf8'),
 			) as MemorySession;
 			if (session.sessionKey !== sessionKey || session.scope !== scope) {
 				throw new Error('Memory session identity check failed');
 			}
 			if (Date.parse(session.expiresAt) <= Date.now()) {
-				await unlink(path).catch(() => undefined);
+				if (this.persistence) {
+					await this.persistence.delete(this.persistenceKey(sessionKey, scope));
+				} else {
+					await unlink(path).catch(() => undefined);
+				}
 				return undefined;
 			}
 			return session;
@@ -166,10 +192,22 @@ export class FileSystemMemoryManager {
 			throw new Error(`Memory session exceeds maximum size of ${this.maxSessionBytes} bytes`);
 		}
 		const path = this.path(session.sessionKey, session.scope);
+		const compressed = await gzipAsync(Buffer.from(serialized, 'utf8'));
+		const stored = this.encryptionKey
+			? encryptEnvelope(compressed, this.encryptionKey)
+			: compressed;
+		if (this.persistence) {
+			await this.persistence.write(
+				this.persistenceKey(session.sessionKey, session.scope),
+				stored,
+				Math.max(1, (Date.parse(session.expiresAt) - Date.now()) / 1000),
+			);
+			return;
+		}
 		await mkdir(dirname(path), { recursive: true });
 		const temporary = `${path}.${randomUUID()}.tmp`;
 		try {
-			await writeFile(temporary, await gzipAsync(Buffer.from(serialized, 'utf8')), { flag: 'wx' });
+			await writeFile(temporary, stored, { flag: 'wx' });
 			await rename(temporary, path);
 		} catch (error) {
 			await unlink(temporary).catch(() => undefined);
@@ -177,7 +215,7 @@ export class FileSystemMemoryManager {
 		}
 	}
 
-	private async withSessionLock<T>(path: string, run: () => Promise<T>): Promise<T> {
+	private async withLocalSessionLock<T>(path: string, run: () => Promise<T>): Promise<T> {
 		const previous = sessionLocks.get(path) ?? Promise.resolve();
 		let release = (): void => undefined;
 		const gate = new Promise<void>((resolveGate) => {
@@ -194,6 +232,15 @@ export class FileSystemMemoryManager {
 		}
 	}
 
+	private async withSessionLock<T>(path: string, run: () => Promise<T>): Promise<T> {
+		if (this.persistence?.withLock) {
+			return await this.persistence.withLock(path, async () =>
+				await this.withLocalSessionLock(path, run),
+			);
+		}
+		return await this.withLocalSessionLock(path, run);
+	}
+
 	async updateSession(input: UpdateMemorySessionInput): Promise<UpdateMemorySessionResult> {
 		const sessionKey = assertKey(input.sessionKey, 'sessionKey');
 		const scope = assertKey(input.scope, 'scope');
@@ -206,7 +253,9 @@ export class FileSystemMemoryManager {
 			32_000,
 			Math.max(100, Math.floor(input.summaryMaximumTokens ?? 4_000)),
 		);
-		const path = this.path(sessionKey, scope);
+		const path = this.persistence
+			? this.persistenceKey(sessionKey, scope)
+			: this.path(sessionKey, scope);
 
 		return await this.withSessionLock(path, async () => {
 			const now = new Date().toISOString();
@@ -319,6 +368,7 @@ export class FileSystemMemoryManager {
 			scope,
 			revision: session.revision,
 			context,
+			sourceEstimatedTokens: estimateTokens(stableSerialize(session)),
 			estimatedTokens: estimateTokens(context),
 			included: {
 				currentFacts: Object.keys(currentFacts).length,
@@ -343,8 +393,11 @@ export class FileSystemMemoryManager {
 	async deleteSession(sessionKeyInput: string, scopeInput: string): Promise<boolean> {
 		const sessionKey = assertKey(sessionKeyInput, 'sessionKey');
 		const scope = assertKey(scopeInput, 'scope');
-		const path = this.path(sessionKey, scope);
+		const path = this.persistence
+			? this.persistenceKey(sessionKey, scope)
+			: this.path(sessionKey, scope);
 		return await this.withSessionLock(path, async () => {
+			if (this.persistence) return await this.persistence.delete(path);
 			try {
 				await unlink(path);
 				return true;
@@ -356,6 +409,7 @@ export class FileSystemMemoryManager {
 	}
 
 	async purgeExpired(now = new Date()): Promise<number> {
+		if (this.persistence) return await this.persistence.purgeExpired();
 		await mkdir(this.root, { recursive: true });
 		const entries = (await readdir(this.root)).filter((entry) =>
 			/^mem_[a-f0-9]{32}\.json\.gz$/.test(entry),
@@ -364,9 +418,12 @@ export class FileSystemMemoryManager {
 		for (const entry of entries) {
 			const path = resolve(join(this.root, entry));
 			try {
-				const session = JSON.parse(
-					(await gunzipAsync(await readFile(path))).toString('utf8'),
-				) as MemorySession;
+				const stored = await readFile(path);
+				if (isEncryptedEnvelope(stored) && !this.encryptionKey) continue;
+				const compressed = this.encryptionKey
+					? decryptEnvelope(stored, this.encryptionKey)
+					: stored;
+				const session = JSON.parse((await gunzipAsync(compressed)).toString('utf8')) as MemorySession;
 				if (Date.parse(session.expiresAt) <= now.getTime()) {
 					await unlink(path);
 					purged++;

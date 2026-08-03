@@ -102,6 +102,7 @@ export interface BuildMemoryContextResult {
 	scope: string;
 	revision: number;
 	context: string;
+	sourceEstimatedTokens: number;
 	estimatedTokens: number;
 	included: {
 		currentFacts: number;
