@@ -1,82 +1,132 @@
 {
-  "id": "contextSaverV1ChatFirstMessage",
-  "name": "[LAB] Context Saver 1.0 — First Message",
-  "active": false,
-  "nodes": [
-    {
-      "parameters": {
-        "public": false,
-        "mode": "webhook",
-        "authentication": "none",
-        "options": {
-          "responseMode": "lastNode",
-          "title": "Context Saver 1.0 — Local Proof",
-          "subtitle": "Synthetic data only; no LLM API is called.",
-          "inputPlaceholder": "Send any message",
-          "loadPreviousSession": "notSupported"
-        }
-      },
-      "id": "chat-trigger",
-      "name": "Chat Test",
-      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
-      "typeVersion": 1.4,
-      "position": [-560, 0],
-      "webhookId": "context-saver-v1-synthetic-chat"
-    },
-    {
-      "parameters": {
-        "mode": "runOnceForEachItem",
-        "language": "javaScript",
-        "jsCode": "const records = Array.from({ length: 160 }, (_, index) => ({ id: 'CHAT-' + String(index).padStart(3, '0'), state: index % 3 === 0 ? 'open' : 'closed', score: index * 11, group: 'group-' + (index % 8), description: 'Generated fictional chat evidence.' })); return { json: { chatInput: $json.chatInput, sessionId: $json.sessionId, ownerId: 'synthetic-chat-user', content: JSON.stringify({ records }) } };"
-      },
-      "id": "generate-chat-data",
-      "name": "Generate Chat Data",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [-320, 0]
-    },
-    {
-      "parameters": {
-        "operation": "optimizeContent",
-        "content": "={{ $json.content }}",
-        "contentType": "json",
-        "currentTask": "={{ $json.chatInput || 'Inspect CHAT-080' }}",
-        "protectedValues": "CHAT-080",
-        "profile": "savings",
-        "virtualizationMode": "required",
-        "virtualizationOptionsV2": {
-          "scope": "synthetic-chat-workflow",
-          "sessionId": "={{ $json.sessionId }}",
-          "ownerId": "={{ $json.ownerId }}",
-          "ttlHours": 1
-        },
-        "qualityLevel": "strict",
-        "outputDetail": "simple"
-      },
-      "id": "chat-data-optimizer",
-      "name": "Data Optimizer",
-      "type": "n8n-nodes-context-optimizer.contextOptimizer",
-      "typeVersion": 3,
-      "position": [-60, 0]
-    },
-    {
-      "parameters": {
-        "operation": "currentExecution",
-        "outputDetail": "simple"
-      },
-      "id": "chat-savings-report",
-      "name": "Savings Report",
-      "type": "n8n-nodes-context-optimizer.tokenAnalytics",
-      "typeVersion": 3,
-      "position": [200, 0]
-    }
-  ],
-  "connections": {
-    "Chat Test": { "main": [[{ "node": "Generate Chat Data", "type": "main", "index": 0 }]] },
-    "Generate Chat Data": { "main": [[{ "node": "Data Optimizer", "type": "main", "index": 0 }]] },
-    "Data Optimizer": { "main": [[{ "node": "Savings Report", "type": "main", "index": 0 }]] }
-  },
-  "settings": { "executionOrder": "v1" },
-  "meta": { "templateCredsSetupCompleted": true },
-  "tags": []
+    "id":  "contextSaverV1ChatFirstMessage",
+    "name":  "[LAB] Context Saver 1.0 — First Message",
+    "active":  false,
+    "nodes":  [
+                  {
+                      "parameters":  {
+                                         "public":  false,
+                                         "mode":  "webhook",
+                                         "authentication":  "none",
+                                         "options":  {
+                                                         "responseMode":  "lastNode",
+                                                         "title":  "Context Saver 1.0 — Local Proof",
+                                                         "subtitle":  "Synthetic data only; no LLM API is called.",
+                                                         "inputPlaceholder":  "Send any message",
+                                                         "loadPreviousSession":  "notSupported"
+                                                     }
+                                     },
+                      "id":  "chat-trigger",
+                      "name":  "Chat Test",
+                      "type":  "@n8n/n8n-nodes-langchain.chatTrigger",
+                      "typeVersion":  1.4,
+                      "position":  [
+                                       -560,
+                                       0
+                                   ],
+                      "webhookId":  "context-saver-v1-synthetic-chat"
+                  },
+                  {
+                      "parameters":  {
+                                         "mode":  "runOnceForEachItem",
+                                         "language":  "javaScript",
+                                         "jsCode":  "const records = Array.from({ length: 160 }, (_, index) =\u003e ({ id: \u0027CHAT-\u0027 + String(index).padStart(3, \u00270\u0027), state: index % 3 === 0 ? \u0027open\u0027 : \u0027closed\u0027, score: index * 11, group: \u0027group-\u0027 + (index % 8), description: \u0027Generated fictional chat evidence.\u0027 })); return { json: { chatInput: $json.chatInput, sessionId: $json.sessionId, ownerId: \u0027synthetic-chat-user\u0027, content: JSON.stringify({ records }) } };"
+                                     },
+                      "id":  "generate-chat-data",
+                      "name":  "Generate Chat Data",
+                      "type":  "n8n-nodes-base.code",
+                      "typeVersion":  2,
+                      "position":  [
+                                       -320,
+                                       0
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "operation":  "optimizeContent",
+                                         "content":  "={{ $json.content }}",
+                                         "contentType":  "json",
+                                         "currentTask":  "={{ $json.chatInput || \u0027Inspect CHAT-080\u0027 }}",
+                                         "protectedValues":  "CHAT-080",
+                                         "profile":  "savings",
+                                         "virtualizationMode":  "required",
+                                         "virtualizationOptionsV2":  {
+                                                                         "scope":  "synthetic-chat-workflow",
+                                                                         "sessionId":  "={{ $json.sessionId }}",
+                                                                         "ownerId":  "={{ $json.ownerId }}",
+                                                                         "ttlHours":  1
+                                                                     },
+                                         "qualityLevel":  "strict",
+                                         "outputDetail":  "simple",
+                                         "resource":  "dataOptimization"
+                                     },
+                      "id":  "chat-data-optimizer",
+                      "name":  "Data Optimizer",
+                      "type":  "n8n-nodes-context-optimizer.contextSaver",
+                      "typeVersion":  3,
+                      "position":  [
+                                       -60,
+                                       0
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "operation":  "currentExecution",
+                                         "outputDetail":  "simple",
+                                         "resource":  "savingsReport"
+                                     },
+                      "id":  "chat-savings-report",
+                      "name":  "Savings Report",
+                      "type":  "n8n-nodes-context-optimizer.contextSaver",
+                      "typeVersion":  3,
+                      "position":  [
+                                       200,
+                                       0
+                                   ]
+                  }
+              ],
+    "connections":  {
+                        "Chat Test":  {
+                                          "main":  [
+                                                       [
+                                                           {
+                                                               "node":  "Generate Chat Data",
+                                                               "type":  "main",
+                                                               "index":  0
+                                                           }
+                                                       ]
+                                                   ]
+                                      },
+                        "Generate Chat Data":  {
+                                                   "main":  [
+                                                                [
+                                                                    {
+                                                                        "node":  "Data Optimizer",
+                                                                        "type":  "main",
+                                                                        "index":  0
+                                                                    }
+                                                                ]
+                                                            ]
+                                               },
+                        "Data Optimizer":  {
+                                               "main":  [
+                                                            [
+                                                                {
+                                                                    "node":  "Savings Report",
+                                                                    "type":  "main",
+                                                                    "index":  0
+                                                                }
+                                                            ]
+                                                        ]
+                                           }
+                    },
+    "settings":  {
+                     "executionOrder":  "v1"
+                 },
+    "meta":  {
+                 "templateCredsSetupCompleted":  true
+             },
+    "tags":  [
+
+             ]
 }

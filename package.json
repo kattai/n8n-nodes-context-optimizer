@@ -1,6 +1,6 @@
 {
 	"name": "n8n-nodes-context-optimizer",
-	"version": "1.0.0",
+	"version": "1.0.1",
 	"description": "Provider-neutral n8n nodes that reduce AI Agent input tokens with quality guards and exact retrieval.",
 	"license": "MIT",
 	"homepage": "https://github.com/kattai/n8n-nodes-context-optimizer",

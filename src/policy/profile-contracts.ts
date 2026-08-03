@@ -37,7 +37,7 @@ export const profileContracts: Record<BuiltInProfileName, ResolvedProfile> = {
 		keepRecentMessages: 3,
 		maxInputTokens: 8_000,
 		summaryThresholdTokens: 4_000,
-		approximateDeduplication: true,
+		approximateDeduplication: false,
 		allowUniqueContentTrimming: false,
 		minimumNetSavingsTokens: 256,
 		eligibleSavingsMinPercent: 60,

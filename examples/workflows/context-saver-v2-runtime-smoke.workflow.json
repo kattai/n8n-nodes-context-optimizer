@@ -1,114 +1,179 @@
 {
-  "id": "contextSaverV2RuntimeSmoke",
-  "name": "[LAB] Context Saver v2 — Runtime sem credenciais",
-  "active": false,
-  "nodes": [
-    {
-      "parameters": {},
-      "id": "runtime-manual",
-      "name": "Executar smoke",
-      "type": "n8n-nodes-base.manualTrigger",
-      "typeVersion": 1,
-      "position": [-600, 0]
-    },
-    {
-      "parameters": {
-        "mode": "runOnceForAllItems",
-        "language": "javaScript",
-        "jsCode": "const records = Array.from({ length: 180 }, (_, index) => ({\n  id: 'ORDER-' + String(index).padStart(3, '0'),\n  status: index % 3 === 0 ? 'pending' : 'approved',\n  amount: 250000 + index * 1250,\n  region: 'region-' + (index % 12),\n  note: 'Contexto operacional repetido e recuperável.'\n}));\nreturn [{ json: { content: JSON.stringify({ source: 'runtime-smoke', records }) } }];"
-      },
-      "id": "runtime-generate",
-      "name": "Gerar base local",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [-360, 0]
-    },
-    {
-      "parameters": {
-        "operation": "optimizeContent",
-        "content": "={{ $json.content }}",
-        "contentType": "json",
-        "currentTask": "Localizar ORDER-080",
-        "protectedValues": "ORDER-080",
-        "profile": "savings",
-        "qualityLevel": "strict",
-        "virtualizationMode": "required",
-        "virtualizationOptionsV2": {
-          "scope": "context-saver-runtime-smoke",
-          "ttlHours": 1
-        },
-        "outputDetail": "simple"
-      },
-      "id": "runtime-content",
-      "name": "Context Saver Content",
-      "type": "n8n-nodes-context-optimizer.contextOptimizer",
-      "typeVersion": 2,
-      "position": [-120, 0]
-    },
-    {
-      "parameters": {
-        "operation": "analyze",
-        "metrics": "={{ $json }}",
-        "outputDetail": "simple"
-      },
-      "id": "runtime-metrics",
-      "name": "Context Saver Metrics",
-      "type": "n8n-nodes-context-optimizer.tokenAnalytics",
-      "typeVersion": 2,
-      "position": [120, 0]
-    },
-    {
-      "parameters": {
-        "operation": "store",
-        "content": "={{ $('Gerar base local').item.json.content }}",
-        "contentType": "json",
-        "scope": "context-saver-runtime-smoke",
-        "fields": "id,status,amount,region",
-        "recordCount": 180,
-        "ttlHours": 1,
-        "outputDetail": "simple"
-      },
-      "id": "runtime-store",
-      "name": "Context Saver Store",
-      "type": "n8n-nodes-context-optimizer.contextStore",
-      "typeVersion": 2,
-      "position": [360, 0]
-    },
-    {
-      "parameters": {
-        "mode": "runOnceForAllItems",
-        "language": "javaScript",
-        "jsCode": "const content = $('Context Saver Content').first().json;\nconst metrics = $('Context Saver Metrics').first().json;\nconst store = $('Context Saver Store').first().json;\nconst checks = {\n  contentSavedTokens: Number(content.tokenSavings?.saved || 0) > 0,\n  contentResource: Boolean(content.contextResource?.resourceId),\n  metricsSavedTokens: Number(metrics.tokenSavings?.saved || 0) > 0,\n  stored: store.stored === true,\n  storeResource: Boolean(store.resourceId)\n};\nif (Object.values(checks).some((value) => !value)) throw new Error('Context Saver runtime smoke failed: ' + JSON.stringify(checks));\nreturn [{ json: { passed: true, checks, eligibleSavings: content.tokenSavings, metrics: metrics.tokenSavings, contentResourceId: content.contextResource.resourceId, storeResourceId: store.resourceId } }];"
-      },
-      "id": "runtime-validate",
-      "name": "Validar runtime",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [600, 0]
-    }
-  ],
-  "connections": {
-    "Executar smoke": {
-      "main": [[{ "node": "Gerar base local", "type": "main", "index": 0 }]]
-    },
-    "Gerar base local": {
-      "main": [[{ "node": "Context Saver Content", "type": "main", "index": 0 }]]
-    },
-    "Context Saver Content": {
-      "main": [[{ "node": "Context Saver Metrics", "type": "main", "index": 0 }]]
-    },
-    "Context Saver Metrics": {
-      "main": [[{ "node": "Context Saver Store", "type": "main", "index": 0 }]]
-    },
-    "Context Saver Store": {
-      "main": [[{ "node": "Validar runtime", "type": "main", "index": 0 }]]
-    }
-  },
-  "settings": {
-    "executionOrder": "v1"
-  },
-  "meta": {
-    "templateCredsSetupCompleted": true
-  },
-  "tags": []
+    "id":  "contextSaverV2RuntimeSmoke",
+    "name":  "[LAB] Context Saver v2 — Runtime sem credenciais",
+    "active":  false,
+    "nodes":  [
+                  {
+                      "parameters":  {
+
+                                     },
+                      "id":  "runtime-manual",
+                      "name":  "Executar smoke",
+                      "type":  "n8n-nodes-base.manualTrigger",
+                      "typeVersion":  1,
+                      "position":  [
+                                       -600,
+                                       0
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "mode":  "runOnceForAllItems",
+                                         "language":  "javaScript",
+                                         "jsCode":  "const records = Array.from({ length: 180 }, (_, index) =\u003e ({\n  id: \u0027ORDER-\u0027 + String(index).padStart(3, \u00270\u0027),\n  status: index % 3 === 0 ? \u0027pending\u0027 : \u0027approved\u0027,\n  amount: 250000 + index * 1250,\n  region: \u0027region-\u0027 + (index % 12),\n  note: \u0027Contexto operacional repetido e recuperável.\u0027\n}));\nreturn [{ json: { content: JSON.stringify({ source: \u0027runtime-smoke\u0027, records }) } }];"
+                                     },
+                      "id":  "runtime-generate",
+                      "name":  "Gerar base local",
+                      "type":  "n8n-nodes-base.code",
+                      "typeVersion":  2,
+                      "position":  [
+                                       -360,
+                                       0
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "operation":  "optimizeContent",
+                                         "content":  "={{ $json.content }}",
+                                         "contentType":  "json",
+                                         "currentTask":  "Localizar ORDER-080",
+                                         "protectedValues":  "ORDER-080",
+                                         "profile":  "savings",
+                                         "qualityLevel":  "strict",
+                                         "virtualizationMode":  "required",
+                                         "virtualizationOptionsV2":  {
+                                                                         "scope":  "context-saver-runtime-smoke",
+                                                                         "ttlHours":  1
+                                                                     },
+                                         "outputDetail":  "simple",
+                                         "resource":  "dataOptimization"
+                                     },
+                      "id":  "runtime-content",
+                      "name":  "Context Saver Content",
+                      "type":  "n8n-nodes-context-optimizer.contextSaver",
+                      "typeVersion":  3,
+                      "position":  [
+                                       -120,
+                                       0
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "operation":  "analyze",
+                                         "metrics":  "={{ $json }}",
+                                         "outputDetail":  "simple",
+                                         "resource":  "savingsReport"
+                                     },
+                      "id":  "runtime-metrics",
+                      "name":  "Context Saver Metrics",
+                      "type":  "n8n-nodes-context-optimizer.contextSaver",
+                      "typeVersion":  3,
+                      "position":  [
+                                       120,
+                                       0
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "operation":  "store",
+                                         "content":  "={{ $(\u0027Gerar base local\u0027).item.json.content }}",
+                                         "contentType":  "json",
+                                         "scope":  "context-saver-runtime-smoke",
+                                         "fields":  "id,status,amount,region",
+                                         "recordCount":  180,
+                                         "ttlHours":  1,
+                                         "outputDetail":  "simple",
+                                         "resource":  "contextStorage"
+                                     },
+                      "id":  "runtime-store",
+                      "name":  "Context Saver Store",
+                      "type":  "n8n-nodes-context-optimizer.contextSaver",
+                      "typeVersion":  3,
+                      "position":  [
+                                       360,
+                                       0
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "mode":  "runOnceForAllItems",
+                                         "language":  "javaScript",
+                                         "jsCode":  "const content = $(\u0027Context Saver Content\u0027).first().json;\nconst metrics = $(\u0027Context Saver Metrics\u0027).first().json;\nconst store = $(\u0027Context Saver Store\u0027).first().json;\nconst checks = {\n  contentSavedTokens: Number(content.tokenSavings?.saved || 0) \u003e 0,\n  contentResource: Boolean(content.contextResource?.resourceId),\n  metricsSavedTokens: Number(metrics.tokenSavings?.saved || 0) \u003e 0,\n  stored: store.stored === true,\n  storeResource: Boolean(store.resourceId)\n};\nif (Object.values(checks).some((value) =\u003e !value)) throw new Error(\u0027Context Saver runtime smoke failed: \u0027 + JSON.stringify(checks));\nreturn [{ json: { passed: true, checks, eligibleSavings: content.tokenSavings, metrics: metrics.tokenSavings, contentResourceId: content.contextResource.resourceId, storeResourceId: store.resourceId } }];"
+                                     },
+                      "id":  "runtime-validate",
+                      "name":  "Validar runtime",
+                      "type":  "n8n-nodes-base.code",
+                      "typeVersion":  2,
+                      "position":  [
+                                       600,
+                                       0
+                                   ]
+                  }
+              ],
+    "connections":  {
+                        "Executar smoke":  {
+                                               "main":  [
+                                                            [
+                                                                {
+                                                                    "node":  "Gerar base local",
+                                                                    "type":  "main",
+                                                                    "index":  0
+                                                                }
+                                                            ]
+                                                        ]
+                                           },
+                        "Gerar base local":  {
+                                                 "main":  [
+                                                              [
+                                                                  {
+                                                                      "node":  "Context Saver Content",
+                                                                      "type":  "main",
+                                                                      "index":  0
+                                                                  }
+                                                              ]
+                                                          ]
+                                             },
+                        "Context Saver Content":  {
+                                                      "main":  [
+                                                                   [
+                                                                       {
+                                                                           "node":  "Context Saver Metrics",
+                                                                           "type":  "main",
+                                                                           "index":  0
+                                                                       }
+                                                                   ]
+                                                               ]
+                                                  },
+                        "Context Saver Metrics":  {
+                                                      "main":  [
+                                                                   [
+                                                                       {
+                                                                           "node":  "Context Saver Store",
+                                                                           "type":  "main",
+                                                                           "index":  0
+                                                                       }
+                                                                   ]
+                                                               ]
+                                                  },
+                        "Context Saver Store":  {
+                                                    "main":  [
+                                                                 [
+                                                                     {
+                                                                         "node":  "Validar runtime",
+                                                                         "type":  "main",
+                                                                         "index":  0
+                                                                     }
+                                                                 ]
+                                                             ]
+                                                }
+                    },
+    "settings":  {
+                     "executionOrder":  "v1"
+                 },
+    "meta":  {
+                 "templateCredsSetupCompleted":  true
+             },
+    "tags":  [
+
+             ]
 }

@@ -1,132 +1,209 @@
 {
-  "id": "contextSaverMemoryRuntimeSmoke",
-  "name": "[LAB] Context Saver Memory — Runtime local",
-  "active": false,
-  "nodes": [
-    {
-      "parameters": {},
-      "id": "memory-manual",
-      "name": "Executar teste de memória",
-      "type": "n8n-nodes-base.manualTrigger",
-      "typeVersion": 1,
-      "position": [-940, 0]
-    },
-    {
-      "parameters": {
-        "operation": "delete",
-        "sessionKey": "context-saver-memory-smoke",
-        "scope": "context-saver-memory-smoke",
-        "storageDirectory": ""
-      },
-      "id": "memory-reset",
-      "name": "Resetar sessão de teste",
-      "type": "n8n-nodes-context-optimizer.contextMemory",
-      "typeVersion": 1,
-      "position": [-700, 0]
-    },
-    {
-      "parameters": {
-        "mode": "runOnceForAllItems",
-        "language": "javaScript",
-        "jsCode": "const messages = Array.from({ length: 40 }, (_, index) => ({\n  id: 'memory-message-' + index,\n  role: index % 2 === 0 ? 'user' : 'assistant',\n  content: index === 0\n    ? 'Correction: project identifier is PRJ-991 and this exact value must remain available.'\n    : index === 1\n      ? 'Pending: confirm the production deployment window before taking any external action.'\n      : 'Historical message ' + index + ': detailed operational discussion already completed and not needed verbatim in every future model request. Reference batch BATCH-' + String(index).padStart(3, '0') + '.',\n  ...(index === 0 ? { kind: 'correction' } : {}),\n  ...(index === 1 ? { kind: 'pending' } : {})\n}));\nconst originalText = JSON.stringify(messages);\nreturn [{ json: { messages, originalEstimatedTokens: Math.ceil(originalText.length / 4) } }];"
-      },
-      "id": "memory-generate",
-      "name": "Gerar histórico crescente",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [-460, 0]
-    },
-    {
-      "parameters": {
-        "operation": "update",
-        "sessionKey": "context-saver-memory-smoke",
-        "scope": "context-saver-memory-smoke",
-        "profile": "savings",
-        "pinnedFacts": "={\"priority\":\"low\",\"projectId\":\"PRJ-991\"}",
-        "structuredState": "={\"goal\":\"prepare deployment\",\"status\":\"waiting_confirmation\"}",
-        "messages": "={{ $json.messages }}",
-        "summaryCandidate": "Earlier discussion defined deployment requirements; exact corrections and pending work remain protected separately.",
-        "archivedResources": "=[]",
-        "ttlHours": 1,
-        "outputDetail": "simple"
-      },
-      "id": "memory-update-one",
-      "name": "Salvar histórico e estado",
-      "type": "n8n-nodes-context-optimizer.contextMemory",
-      "typeVersion": 1,
-      "position": [-220, 0]
-    },
-    {
-      "parameters": {
-        "operation": "update",
-        "sessionKey": "context-saver-memory-smoke",
-        "scope": "context-saver-memory-smoke",
-        "profile": "savings",
-        "pinnedFacts": "={\"priority\":\"critical\"}",
-        "structuredState": "={}",
-        "messages": "=[]",
-        "summaryCandidate": "",
-        "archivedResources": "=[]",
-        "ttlHours": 1,
-        "outputDetail": "simple"
-      },
-      "id": "memory-update-two",
-      "name": "Substituir fato atual",
-      "type": "n8n-nodes-context-optimizer.contextMemory",
-      "typeVersion": 1,
-      "position": [20, 0]
-    },
-    {
-      "parameters": {
-        "operation": "build",
-        "sessionKey": "={{ $json.sessionKey }}",
-        "scope": "context-saver-memory-smoke",
-        "storageDirectory": ""
-      },
-      "id": "memory-build",
-      "name": "Montar contexto compacto",
-      "type": "n8n-nodes-context-optimizer.contextMemory",
-      "typeVersion": 1,
-      "position": [260, 0]
-    },
-    {
-      "parameters": {
-        "mode": "runOnceForAllItems",
-        "language": "javaScript",
-        "jsCode": "const source = $('Gerar histórico crescente').first().json;\nconst memory = $('Montar contexto compacto').first().json;\nconst original = Number(source.originalEstimatedTokens || 0);\nconst optimized = Number(memory.estimatedTokens || 0);\nconst percent = original > 0 ? Number((((original - optimized) / original) * 100).toFixed(2)) : 0;\nconst context = String(memory.context || '');\nconst checks = {\n  reductionAtLeast70Percent: percent >= 70,\n  currentFactOnlyOnce: (context.match(/\\\"priority\\\":\\\"critical\\\"/g) || []).length === 1,\n  supersededFactOmitted: !context.includes('\\\"priority\\\":\\\"low\\\"'),\n  correctionProtected: context.includes('PRJ-991'),\n  pendingProtected: context.includes('production deployment window'),\n  oldMessagesArchived: Number(memory.archivedEventCount || 0) === 37\n};\nif (Object.values(checks).some((value) => !value)) throw new Error('Context Saver Memory runtime smoke failed: ' + JSON.stringify({ checks, original, optimized, percent, context }));\nreturn [{ json: { passed: true, checks, tokens: { originalHistory: original, compactMemory: optimized, saved: original - optimized, percent }, included: memory.included, archivedEventCount: memory.archivedEventCount } }];"
-      },
-      "id": "memory-validate",
-      "name": "Comprovar economia e integridade",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [500, 0]
-    }
-  ],
-  "connections": {
-    "Executar teste de memória": {
-      "main": [[{ "node": "Resetar sessão de teste", "type": "main", "index": 0 }]]
-    },
-    "Resetar sessão de teste": {
-      "main": [[{ "node": "Gerar histórico crescente", "type": "main", "index": 0 }]]
-    },
-    "Gerar histórico crescente": {
-      "main": [[{ "node": "Salvar histórico e estado", "type": "main", "index": 0 }]]
-    },
-    "Salvar histórico e estado": {
-      "main": [[{ "node": "Substituir fato atual", "type": "main", "index": 0 }]]
-    },
-    "Substituir fato atual": {
-      "main": [[{ "node": "Montar contexto compacto", "type": "main", "index": 0 }]]
-    },
-    "Montar contexto compacto": {
-      "main": [[{ "node": "Comprovar economia e integridade", "type": "main", "index": 0 }]]
-    }
-  },
-  "settings": {
-    "executionOrder": "v1"
-  },
-  "meta": {
-    "templateCredsSetupCompleted": true
-  },
-  "tags": []
+    "id":  "contextSaverMemoryRuntimeSmoke",
+    "name":  "[LAB] Context Saver Memory — Runtime local",
+    "active":  false,
+    "nodes":  [
+                  {
+                      "parameters":  {
+
+                                     },
+                      "id":  "memory-manual",
+                      "name":  "Executar teste de memória",
+                      "type":  "n8n-nodes-base.manualTrigger",
+                      "typeVersion":  1,
+                      "position":  [
+                                       -940,
+                                       0
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "operation":  "delete",
+                                         "sessionKey":  "context-saver-memory-smoke",
+                                         "scope":  "context-saver-memory-smoke",
+                                         "storageDirectory":  "",
+                                         "resource":  "sessionMemory"
+                                     },
+                      "id":  "memory-reset",
+                      "name":  "Resetar sessão de teste",
+                      "type":  "n8n-nodes-context-optimizer.contextSaver",
+                      "typeVersion":  3,
+                      "position":  [
+                                       -700,
+                                       0
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "mode":  "runOnceForAllItems",
+                                         "language":  "javaScript",
+                                         "jsCode":  "const messages = Array.from({ length: 40 }, (_, index) =\u003e ({\n  id: \u0027memory-message-\u0027 + index,\n  role: index % 2 === 0 ? \u0027user\u0027 : \u0027assistant\u0027,\n  content: index === 0\n    ? \u0027Correction: project identifier is PRJ-991 and this exact value must remain available.\u0027\n    : index === 1\n      ? \u0027Pending: confirm the production deployment window before taking any external action.\u0027\n      : \u0027Historical message \u0027 + index + \u0027: detailed operational discussion already completed and not needed verbatim in every future model request. Reference batch BATCH-\u0027 + String(index).padStart(3, \u00270\u0027) + \u0027.\u0027,\n  ...(index === 0 ? { kind: \u0027correction\u0027 } : {}),\n  ...(index === 1 ? { kind: \u0027pending\u0027 } : {})\n}));\nconst originalText = JSON.stringify(messages);\nreturn [{ json: { messages, originalEstimatedTokens: Math.ceil(originalText.length / 4) } }];"
+                                     },
+                      "id":  "memory-generate",
+                      "name":  "Gerar histórico crescente",
+                      "type":  "n8n-nodes-base.code",
+                      "typeVersion":  2,
+                      "position":  [
+                                       -460,
+                                       0
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "operation":  "update",
+                                         "sessionKey":  "context-saver-memory-smoke",
+                                         "scope":  "context-saver-memory-smoke",
+                                         "profile":  "savings",
+                                         "pinnedFacts":  "={\"priority\":\"low\",\"projectId\":\"PRJ-991\"}",
+                                         "structuredState":  "={\"goal\":\"prepare deployment\",\"status\":\"waiting_confirmation\"}",
+                                         "messages":  "={{ $json.messages }}",
+                                         "summaryCandidate":  "Earlier discussion defined deployment requirements; exact corrections and pending work remain protected separately.",
+                                         "archivedResources":  "=[]",
+                                         "ttlHours":  1,
+                                         "outputDetail":  "simple",
+                                         "resource":  "sessionMemory"
+                                     },
+                      "id":  "memory-update-one",
+                      "name":  "Salvar histórico e estado",
+                      "type":  "n8n-nodes-context-optimizer.contextSaver",
+                      "typeVersion":  3,
+                      "position":  [
+                                       -220,
+                                       0
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "operation":  "update",
+                                         "sessionKey":  "context-saver-memory-smoke",
+                                         "scope":  "context-saver-memory-smoke",
+                                         "profile":  "savings",
+                                         "pinnedFacts":  "={\"priority\":\"critical\"}",
+                                         "structuredState":  "={}",
+                                         "messages":  "=[]",
+                                         "summaryCandidate":  "",
+                                         "archivedResources":  "=[]",
+                                         "ttlHours":  1,
+                                         "outputDetail":  "simple",
+                                         "resource":  "sessionMemory"
+                                     },
+                      "id":  "memory-update-two",
+                      "name":  "Substituir fato atual",
+                      "type":  "n8n-nodes-context-optimizer.contextSaver",
+                      "typeVersion":  3,
+                      "position":  [
+                                       20,
+                                       0
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "operation":  "build",
+                                         "sessionKey":  "={{ $json.sessionKey }}",
+                                         "scope":  "context-saver-memory-smoke",
+                                         "storageDirectory":  "",
+                                         "resource":  "sessionMemory"
+                                     },
+                      "id":  "memory-build",
+                      "name":  "Montar contexto compacto",
+                      "type":  "n8n-nodes-context-optimizer.contextSaver",
+                      "typeVersion":  3,
+                      "position":  [
+                                       260,
+                                       0
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "mode":  "runOnceForAllItems",
+                                         "language":  "javaScript",
+                                         "jsCode":  "const source = $(\u0027Gerar histórico crescente\u0027).first().json;\nconst memory = $(\u0027Montar contexto compacto\u0027).first().json;\nconst original = Number(source.originalEstimatedTokens || 0);\nconst optimized = Number(memory.estimatedTokens || 0);\nconst percent = original \u003e 0 ? Number((((original - optimized) / original) * 100).toFixed(2)) : 0;\nconst context = String(memory.context || \u0027\u0027);\nconst checks = {\n  reductionAtLeast70Percent: percent \u003e= 70,\n  currentFactOnlyOnce: (context.match(/\\\"priority\\\":\\\"critical\\\"/g) || []).length === 1,\n  supersededFactOmitted: !context.includes(\u0027\\\"priority\\\":\\\"low\\\"\u0027),\n  correctionProtected: context.includes(\u0027PRJ-991\u0027),\n  pendingProtected: context.includes(\u0027production deployment window\u0027),\n  oldMessagesArchived: Number(memory.archivedEventCount || 0) === 37\n};\nif (Object.values(checks).some((value) =\u003e !value)) throw new Error(\u0027Context Saver Memory runtime smoke failed: \u0027 + JSON.stringify({ checks, original, optimized, percent, context }));\nreturn [{ json: { passed: true, checks, tokens: { originalHistory: original, compactMemory: optimized, saved: original - optimized, percent }, included: memory.included, archivedEventCount: memory.archivedEventCount } }];"
+                                     },
+                      "id":  "memory-validate",
+                      "name":  "Comprovar economia e integridade",
+                      "type":  "n8n-nodes-base.code",
+                      "typeVersion":  2,
+                      "position":  [
+                                       500,
+                                       0
+                                   ]
+                  }
+              ],
+    "connections":  {
+                        "Executar teste de memória":  {
+                                                          "main":  [
+                                                                       [
+                                                                           {
+                                                                               "node":  "Resetar sessão de teste",
+                                                                               "type":  "main",
+                                                                               "index":  0
+                                                                           }
+                                                                       ]
+                                                                   ]
+                                                      },
+                        "Resetar sessão de teste":  {
+                                                        "main":  [
+                                                                     [
+                                                                         {
+                                                                             "node":  "Gerar histórico crescente",
+                                                                             "type":  "main",
+                                                                             "index":  0
+                                                                         }
+                                                                     ]
+                                                                 ]
+                                                    },
+                        "Gerar histórico crescente":  {
+                                                          "main":  [
+                                                                       [
+                                                                           {
+                                                                               "node":  "Salvar histórico e estado",
+                                                                               "type":  "main",
+                                                                               "index":  0
+                                                                           }
+                                                                       ]
+                                                                   ]
+                                                      },
+                        "Salvar histórico e estado":  {
+                                                          "main":  [
+                                                                       [
+                                                                           {
+                                                                               "node":  "Substituir fato atual",
+                                                                               "type":  "main",
+                                                                               "index":  0
+                                                                           }
+                                                                       ]
+                                                                   ]
+                                                      },
+                        "Substituir fato atual":  {
+                                                      "main":  [
+                                                                   [
+                                                                       {
+                                                                           "node":  "Montar contexto compacto",
+                                                                           "type":  "main",
+                                                                           "index":  0
+                                                                       }
+                                                                   ]
+                                                               ]
+                                                  },
+                        "Montar contexto compacto":  {
+                                                         "main":  [
+                                                                      [
+                                                                          {
+                                                                              "node":  "Comprovar economia e integridade",
+                                                                              "type":  "main",
+                                                                              "index":  0
+                                                                          }
+                                                                      ]
+                                                                  ]
+                                                     }
+                    },
+    "settings":  {
+                     "executionOrder":  "v1"
+                 },
+    "meta":  {
+                 "templateCredsSetupCompleted":  true
+             },
+    "tags":  [
+
+             ]
 }

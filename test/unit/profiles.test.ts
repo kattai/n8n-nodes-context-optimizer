@@ -46,6 +46,7 @@ describe('resolveProfile', () => {
 		expect(quality.virtualization).toBe('disabled');
 		expect(balanced.virtualization).toBe('automatic');
 		expect(savings.virtualization).toBe('required');
+		expect(savings.approximateDeduplication).toBe(false);
 	});
 
 	it('rejects invalid limits', () => {

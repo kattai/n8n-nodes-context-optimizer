@@ -60,6 +60,20 @@ interface ToolSchemaNodeOptions {
 	tokenBudget?: number;
 }
 
+interface RetrieverNodeLike {
+	type: string;
+	parameters?: Record<string, unknown>;
+}
+
+export interface RetrieverConfigurationExpectation {
+	workflowId: string;
+	scope: string;
+	directory: string;
+	provider: StorageProvider;
+	redisKeyPrefix: string;
+	encryptStorage: boolean;
+}
+
 function namesList(value: string | undefined): string[] {
 	return String(value ?? '')
 		.split(/\r?\n|,/)
@@ -78,7 +92,38 @@ function connectedScope(value: unknown, workflowId: string): string | undefined 
 	return raw;
 }
 
-function hasCompatibleRetriever(
+export function isExactLookupNode(node: RetrieverNodeLike): boolean {
+	return (
+		node.type.endsWith('.contextRetrieverTool') ||
+		(node.type.endsWith('.contextSaver') && node.parameters?.resource === 'exactLookup')
+	);
+}
+
+export function retrieverMatchesConfiguration(
+	retriever: RetrieverNodeLike,
+	expected: RetrieverConfigurationExpectation,
+): boolean {
+	if (!isExactLookupNode(retriever)) return false;
+	const retrieverScope = connectedScope(retriever.parameters?.scope, expected.workflowId);
+	const retrieverDirectory = normalizedDirectory(
+		String(retriever.parameters?.storageDirectory ?? ''),
+	);
+	const retrieverProvider = String(
+		retriever.parameters?.storageProvider ?? 'filesystem',
+	) as StorageProvider;
+	const retrieverPrefix = String(retriever.parameters?.redisKeyPrefix ?? 'context-saver');
+	const retrieverEncryption = Boolean(retriever.parameters?.encryptStorage ?? false);
+	return (
+		retrieverScope === expected.scope &&
+		retrieverProvider === expected.provider &&
+		retrieverEncryption === expected.encryptStorage &&
+		(expected.provider === 'redis'
+			? retrieverPrefix === expected.redisKeyPrefix
+			: retrieverDirectory === normalizedDirectory(expected.directory))
+	);
+}
+
+export function hasCompatibleRetriever(
 	execution: ISupplyDataFunctions,
 	scope: string,
 	directory: string,
@@ -105,28 +150,16 @@ function hasCompatibleRetriever(
 				connectionType: NodeConnectionTypes.AiTool,
 				depth: 1,
 			})
-			.filter((node) => node.type.endsWith('.contextRetrieverTool'))
-			.some((retriever) => {
-				const retrieverScope = connectedScope(retriever.parameters?.scope, workflowId);
-				const retrieverDirectory = normalizedDirectory(
-					String(retriever.parameters?.storageDirectory ?? ''),
-				);
-				const retrieverProvider = String(
-					retriever.parameters?.storageProvider ?? 'filesystem',
-				) as StorageProvider;
-				const retrieverPrefix = String(
-					retriever.parameters?.redisKeyPrefix ?? 'context-saver',
-				);
-				const retrieverEncryption = Boolean(retriever.parameters?.encryptStorage ?? false);
-				return (
-					retrieverScope === scope &&
-					retrieverProvider === provider &&
-					retrieverEncryption === encryptStorage &&
-					(provider === 'redis'
-						? retrieverPrefix === redisKeyPrefix
-						: retrieverDirectory === normalizedDirectory(directory))
-				);
-			}),
+			.some((retriever) =>
+				retrieverMatchesConfiguration(retriever, {
+					workflowId,
+					scope,
+					directory,
+					provider,
+					redisKeyPrefix,
+					encryptStorage,
+				}),
+			),
 	);
 }
 

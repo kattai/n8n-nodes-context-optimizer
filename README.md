@@ -5,13 +5,13 @@ Provider-neutral community nodes that reduce AI Agent input tokens while preserv
 ## Five-minute setup
 
 ```text
-Any n8n Chat Model -> Agent Optimizer -> AI Agent
-                                          |-> Exact Lookup (only for Maximum Savings)
+Any n8n Chat Model -> Context Saver / Agent Model -> AI Agent
+                                                       |-> Context Saver / Exact Lookup
 
 AI Agent -> Savings Report
 ```
 
-1. Insert **Agent Optimizer** between the Chat Model and AI Agent.
+1. Insert **Context Saver / Agent Model** between the Chat Model and AI Agent.
 2. Choose **Save Tokens** and **Balanced**.
 3. Keep **Adaptive Quality Protection** enabled.
 4. Add **Savings Report** after the agent response.
@@ -23,7 +23,7 @@ No model provider is required by Context Saver. It wraps compatible n8n chat mod
 
 | Node | Use it for | Where it connects |
 |---|---|---|
-| **Agent Optimizer** | Every call of one AI Agent: prompt, history, tools, and large tool results | Chat Model -> Agent Optimizer -> AI Agent |
+| **Agent Model** | Every call of one AI Agent: prompt, history, tools, and large tool results | Chat Model -> Context Saver / Agent Model -> AI Agent |
 | **Data Optimizer** | Large JSON, API, RAG, HTML, logs, text, or tool output | Before the AI Agent input |
 | **Agent Handoff** | Compact evidence passed between multiple agents | Agent A -> Agent Handoff -> Agent B |
 | **Session Memory** | Current facts, state, protected events, recent window, and archive | Main workflow path before the Agent |
@@ -31,7 +31,7 @@ No model provider is required by Context Saver. It wraps compatible n8n chat mod
 | **Exact Lookup** | Bounded exact retrieval from Context Storage | AI Tool port of the Agent |
 | **Savings Report** | Current-execution totals and diagnostics | After the optimized agent path |
 
-Use only the nodes needed by the workflow. **Agent Optimizer** alone is the normal starting point.
+Use only the features needed by the workflow. **Agent Model** alone is the normal starting point.
 
 ## Profiles
 
@@ -82,7 +82,7 @@ Resource access is rejected when workflow, session, owner, TTL, hash, encryption
 
 ## Measurement
 
-**Savings Report / Current Execution** automatically collects Agent Optimizer model calls plus Data Optimizer, Agent Handoff, Session Memory, Context Storage, and Exact Lookup telemetry. It subtracts compression, verification, and retrieval overhead from net savings. Provider usage is never invented.
+**Savings Report / Current Execution** automatically collects Agent Model calls plus Data Optimizer, Agent Handoff, Session Memory, Context Storage, and Exact Lookup telemetry. It subtracts compression, verification, and retrieval overhead from net savings. Provider usage is never invented.
 
 ## Local validation
 
@@ -108,4 +108,4 @@ Importable local workflows:
 - [Profile benchmark](benchmarks/results/profile-v2-results.md)
 - [Synthetic boss benchmark](benchmarks/results/context-saver-v1-bosses.md)
 
-The package is private until release approval. Existing internal node IDs, legacy versions, operations, fields, profile aliases, workflow imports, and unencrypted filesystem resources remain supported.
+The package publishes one `Context Saver` picker entry. Version 1.0.1 workflow examples use only this unified type. Legacy profile aliases and stored resources remain readable; legacy workflow JSON must be migrated to the unified type before import.

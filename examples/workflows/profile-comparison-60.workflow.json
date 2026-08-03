@@ -1,878 +1,909 @@
 {
-  "id": "tokenSaverProfileComparison60",
-  "name": "[LAB] Token Saver — Comparação dos Perfis (60 registros)",
-  "active": false,
-  "nodes": [
-    {
-      "parameters": {
-        "content": "## Comparação econômica dos perfis\n\nUm baseline compartilhado + Maximum Quality + Balanced + Maximum Savings. Mesmos 60 registros, pergunta, Gemini 2.5 Flash e temperatura 0. Métrica: tokens reais informados pelo provider.",
-        "height": 1180,
-        "width": 3100,
-        "color": 5
-      },
-      "id": "profile-test-note",
-      "name": "Teste controlado",
-      "type": "n8n-nodes-base.stickyNote",
-      "typeVersion": 1,
-      "position": [
-        -1380,
-        -720
-      ]
-    },
-    {
-      "parameters": {
-        "httpMethod": "POST",
-        "path": "token-saver-profile-comparison-60",
-        "responseMode": "lastNode",
-        "options": {}
-      },
-      "id": "profile-comparison-webhook",
-      "name": "Executar Comparação de Perfis",
-      "type": "n8n-nodes-base.webhook",
-      "typeVersion": 2,
-      "position": [
-        -1320,
-        0
-      ],
-      "webhookId": "995d8374-a3ee-4517-b3bd-c7e8bcc09cd1"
-    },
-    {
-      "parameters": {
-        "assignments": {
-          "assignments": [
-            {
-              "id": "chat-input",
-              "name": "chatInput",
-              "value": "Consulte o lead LEAD-1942.",
-              "type": "string"
-            }
-          ]
-        },
-        "options": {}
-      },
-      "id": "profile-normalize",
-      "name": "Entrada Única",
-      "type": "n8n-nodes-base.set",
-      "typeVersion": 3.4,
-      "position": [
-        -1100,
-        0
-      ]
-    },
-    {
-      "parameters": {
-        "promptType": "define",
-        "text": "={{ $('Entrada Única').item.json.chatInput }}",
-        "options": {
-          "systemMessage": "Você é um agente de validação de dados.\nPara toda mensagem recebida, execute exatamente uma vez a tool consultar_base_leads.\nLocalize exclusivamente o registro LEAD-1942. Não use conhecimento externo e não invente dados.\nResponda exatamente em cinco linhas, sem introdução e sem Markdown:\nLead: [lead_identifier]\nCidade: [franchise_city_of_interest]\nCapital: [declared_available_investment_capital]\nReunião: [scheduled_expansion_meeting]\nAprovado: [eligibility_approved em minúsculas]",
-          "maxIterations": 3,
-          "returnIntermediateSteps": false,
-          "enableStreaming": false
-        }
-      },
-      "id": "agent-baseline-8b6d9893-2b76-463d-8f8a-dd6ef59943dd",
-      "name": "Agente — Baseline",
-      "type": "@n8n/n8n-nodes-langchain.agent",
-      "typeVersion": 3.1,
-      "position": [
-        -760,
-        -540
-      ]
-    },
-    {
-      "parameters": {
-        "modelName": "models/gemini-2.5-flash",
-        "options": {
-          "temperature": 0,
-          "maxOutputTokens": 2048
-        }
-      },
-      "id": "gemini-baseline-407f30a3-b138-429e-9596-c96fe6802475",
-      "name": "Gemini — Baseline",
-      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
-      "typeVersion": 1.1,
-      "position": [
-        -900,
-        -350
-      ]
-    },
-    {
-      "parameters": {
-        "behavior": "measureOnly"
-      },
-      "id": "wrapper-baseline-7f05ad97-55ed-4e72-b62a-65f9656c5de2",
-      "name": "Token Saver — Baseline",
-      "type": "n8n-nodes-context-optimizer.optimizedChatModel",
-      "typeVersion": 1,
-      "position": [
-        -680,
-        -350
-      ]
-    },
-    {
-      "parameters": {
-        "name": "consultar_base_leads",
-        "description": "Obrigatória. Retorna a base completa de leads. Use uma vez e localize o lead_identifier solicitado.",
-        "language": "javaScript",
-        "jsCode": "const records = [];\nfor (let index = 0; index < 60; index += 1) {\n  const numericId = 1900 + index;\n  const target = numericId === 1942;\n  records.push({\n    lead_identifier: 'LEAD-' + numericId,\n    contact_full_name: target ? 'Marina Oliveira' : 'Lead Demonstração ' + numericId,\n    contact_email_address: target ? 'marina.oliveira@example.com' : 'lead' + numericId + '@example.com',\n    franchise_city_of_interest: target ? 'Campinas/SP' : ['Curitiba/PR', 'Goiânia/GO', 'Londrina/PR', 'Sorocaba/SP'][index % 4],\n    declared_available_investment_capital: target ? 'R$ 850.000,00' : 'R$ ' + (450000 + (index % 8) * 50000).toLocaleString('pt-BR') + ',00',\n    commercial_pipeline_stage: ['Novo lead', 'Qualificação', 'Reunião pendente'][index % 3],\n    acquisition_source_channel: ['Site institucional', 'Landing page', 'Indicação'][index % 3],\n    franchise_interest_temperature: ['alto', 'médio', 'em avaliação'][index % 3],\n    scheduled_expansion_meeting: target ? '05/08/2026 14:30' : null,\n    eligibility_approved: target ? false : index % 5 !== 0,\n    responsible_expansion_team: 'Expansão Casa do Construtor',\n    operational_follow_up_note: 'Confirmar somente os dados presentes neste registro; não inferir cidade, capital, data, horário ou aprovação.',\n    record_created_at: '2026-07-' + String((index % 28) + 1).padStart(2, '0') + 'T09:00:00-03:00'\n  });\n}\nreturn JSON.stringify({\n  dataset_name: 'Leads de expansão — laboratório local',\n  query_received: query,\n  total_records: records.length,\n  records\n});",
-        "specifyInputSchema": true,
-        "schemaType": "manual",
-        "inputSchema": "{\"type\":\"object\",\"properties\":{\"query\":{\"type\":\"string\",\"description\":\"Identificador exato do lead a localizar\"}},\"required\":[\"query\"]}"
-      },
-      "id": "tool-baseline-54e65b28-d6f7-48d0-8dd6-1df3f266336b",
-      "name": "Base 60 Leads — Baseline",
-      "type": "@n8n/n8n-nodes-langchain.toolCode",
-      "typeVersion": 1.3,
-      "position": [
-        -430,
-        -350
-      ]
-    },
-    {
-      "parameters": {
-        "assignments": {
-          "assignments": [
-            {
-              "id": "output-baseline",
-              "name": "baseline_output",
-              "value": "={{ $('Agente — Baseline').item.json.output }}",
-              "type": "string"
-            }
-          ]
-        },
-        "options": {}
-      },
-      "id": "result-baseline-6913c641-fe41-499f-b780-44d7df89b772",
-      "name": "Resultado — Baseline",
-      "type": "n8n-nodes-base.set",
-      "typeVersion": 3.4,
-      "position": [
-        -160,
-        -540
-      ]
-    },
-    {
-      "parameters": {
-        "promptType": "define",
-        "text": "={{ $('Entrada Única').item.json.chatInput }}",
-        "options": {
-          "systemMessage": "Você é um agente de validação de dados.\nPara toda mensagem recebida, execute exatamente uma vez a tool consultar_base_leads.\nLocalize exclusivamente o registro LEAD-1942. Não use conhecimento externo e não invente dados.\nResponda exatamente em cinco linhas, sem introdução e sem Markdown:\nLead: [lead_identifier]\nCidade: [franchise_city_of_interest]\nCapital: [declared_available_investment_capital]\nReunião: [scheduled_expansion_meeting]\nAprovado: [eligibility_approved em minúsculas]",
-          "maxIterations": 3,
-          "returnIntermediateSteps": false,
-          "enableStreaming": false
-        }
-      },
-      "id": "agent-quality-700488bd-628b-4a86-9fec-a52052ea03e1",
-      "name": "Agente — Maximum Quality",
-      "type": "@n8n/n8n-nodes-langchain.agent",
-      "typeVersion": 3.1,
-      "position": [
-        -760,
-        -180
-      ]
-    },
-    {
-      "parameters": {
-        "modelName": "models/gemini-2.5-flash",
-        "options": {
-          "temperature": 0,
-          "maxOutputTokens": 2048
-        }
-      },
-      "id": "gemini-quality-58a4f1dd-39b1-40e8-8e00-07085ae20658",
-      "name": "Gemini — Maximum Quality",
-      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
-      "typeVersion": 1.1,
-      "position": [
-        -900,
-        10
-      ]
-    },
-    {
-      "parameters": {
-        "behavior": "optimizeAndMeasure",
-        "profile": "safe"
-      },
-      "id": "wrapper-quality-98185d3f-5e64-4f65-ade4-aedf0a0e375f",
-      "name": "Token Saver — Maximum Quality",
-      "type": "n8n-nodes-context-optimizer.optimizedChatModel",
-      "typeVersion": 1,
-      "position": [
-        -680,
-        10
-      ]
-    },
-    {
-      "parameters": {
-        "name": "consultar_base_leads",
-        "description": "Obrigatória. Retorna a base completa de leads. Use uma vez e localize o lead_identifier solicitado.",
-        "language": "javaScript",
-        "jsCode": "const records = [];\nfor (let index = 0; index < 60; index += 1) {\n  const numericId = 1900 + index;\n  const target = numericId === 1942;\n  records.push({\n    lead_identifier: 'LEAD-' + numericId,\n    contact_full_name: target ? 'Marina Oliveira' : 'Lead Demonstração ' + numericId,\n    contact_email_address: target ? 'marina.oliveira@example.com' : 'lead' + numericId + '@example.com',\n    franchise_city_of_interest: target ? 'Campinas/SP' : ['Curitiba/PR', 'Goiânia/GO', 'Londrina/PR', 'Sorocaba/SP'][index % 4],\n    declared_available_investment_capital: target ? 'R$ 850.000,00' : 'R$ ' + (450000 + (index % 8) * 50000).toLocaleString('pt-BR') + ',00',\n    commercial_pipeline_stage: ['Novo lead', 'Qualificação', 'Reunião pendente'][index % 3],\n    acquisition_source_channel: ['Site institucional', 'Landing page', 'Indicação'][index % 3],\n    franchise_interest_temperature: ['alto', 'médio', 'em avaliação'][index % 3],\n    scheduled_expansion_meeting: target ? '05/08/2026 14:30' : null,\n    eligibility_approved: target ? false : index % 5 !== 0,\n    responsible_expansion_team: 'Expansão Casa do Construtor',\n    operational_follow_up_note: 'Confirmar somente os dados presentes neste registro; não inferir cidade, capital, data, horário ou aprovação.',\n    record_created_at: '2026-07-' + String((index % 28) + 1).padStart(2, '0') + 'T09:00:00-03:00'\n  });\n}\nreturn JSON.stringify({\n  dataset_name: 'Leads de expansão — laboratório local',\n  query_received: query,\n  total_records: records.length,\n  records\n});",
-        "specifyInputSchema": true,
-        "schemaType": "manual",
-        "inputSchema": "{\"type\":\"object\",\"properties\":{\"query\":{\"type\":\"string\",\"description\":\"Identificador exato do lead a localizar\"}},\"required\":[\"query\"]}"
-      },
-      "id": "tool-quality-6fd16474-76b1-47e3-b508-fd07fe6ff385",
-      "name": "Base 60 Leads — Maximum Quality",
-      "type": "@n8n/n8n-nodes-langchain.toolCode",
-      "typeVersion": 1.3,
-      "position": [
-        -430,
-        10
-      ]
-    },
-    {
-      "parameters": {
-        "assignments": {
-          "assignments": [
-            {
-              "id": "output-quality",
-              "name": "quality_output",
-              "value": "={{ $('Agente — Maximum Quality').item.json.output }}",
-              "type": "string"
-            }
-          ]
-        },
-        "options": {}
-      },
-      "id": "result-quality-53ac6271-074c-4a4e-8040-edb27c84c66f",
-      "name": "Resultado — Maximum Quality",
-      "type": "n8n-nodes-base.set",
-      "typeVersion": 3.4,
-      "position": [
-        -160,
-        -180
-      ]
-    },
-    {
-      "parameters": {
-        "promptType": "define",
-        "text": "={{ $('Entrada Única').item.json.chatInput }}",
-        "options": {
-          "systemMessage": "Você é um agente de validação de dados.\nPara toda mensagem recebida, execute exatamente uma vez a tool consultar_base_leads.\nLocalize exclusivamente o registro LEAD-1942. Não use conhecimento externo e não invente dados.\nResponda exatamente em cinco linhas, sem introdução e sem Markdown:\nLead: [lead_identifier]\nCidade: [franchise_city_of_interest]\nCapital: [declared_available_investment_capital]\nReunião: [scheduled_expansion_meeting]\nAprovado: [eligibility_approved em minúsculas]",
-          "maxIterations": 3,
-          "returnIntermediateSteps": false,
-          "enableStreaming": false
-        }
-      },
-      "id": "agent-balanced-864cb1db-23d5-43f4-a96e-086d8836c7e2",
-      "name": "Agente — Balanced",
-      "type": "@n8n/n8n-nodes-langchain.agent",
-      "typeVersion": 3.1,
-      "position": [
-        -760,
-        180
-      ]
-    },
-    {
-      "parameters": {
-        "modelName": "models/gemini-2.5-flash",
-        "options": {
-          "temperature": 0,
-          "maxOutputTokens": 2048
-        }
-      },
-      "id": "gemini-balanced-27ca50f7-05d3-478b-acc2-dfe61d97ebef",
-      "name": "Gemini — Balanced",
-      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
-      "typeVersion": 1.1,
-      "position": [
-        -900,
-        370
-      ]
-    },
-    {
-      "parameters": {
-        "behavior": "optimizeAndMeasure",
-        "profile": "balanced"
-      },
-      "id": "wrapper-balanced-9f5e64ef-dcc4-4767-ad5e-2dcd76afcddb",
-      "name": "Token Saver — Balanced",
-      "type": "n8n-nodes-context-optimizer.optimizedChatModel",
-      "typeVersion": 1,
-      "position": [
-        -680,
-        370
-      ]
-    },
-    {
-      "parameters": {
-        "name": "consultar_base_leads",
-        "description": "Obrigatória. Retorna a base completa de leads. Use uma vez e localize o lead_identifier solicitado.",
-        "language": "javaScript",
-        "jsCode": "const records = [];\nfor (let index = 0; index < 60; index += 1) {\n  const numericId = 1900 + index;\n  const target = numericId === 1942;\n  records.push({\n    lead_identifier: 'LEAD-' + numericId,\n    contact_full_name: target ? 'Marina Oliveira' : 'Lead Demonstração ' + numericId,\n    contact_email_address: target ? 'marina.oliveira@example.com' : 'lead' + numericId + '@example.com',\n    franchise_city_of_interest: target ? 'Campinas/SP' : ['Curitiba/PR', 'Goiânia/GO', 'Londrina/PR', 'Sorocaba/SP'][index % 4],\n    declared_available_investment_capital: target ? 'R$ 850.000,00' : 'R$ ' + (450000 + (index % 8) * 50000).toLocaleString('pt-BR') + ',00',\n    commercial_pipeline_stage: ['Novo lead', 'Qualificação', 'Reunião pendente'][index % 3],\n    acquisition_source_channel: ['Site institucional', 'Landing page', 'Indicação'][index % 3],\n    franchise_interest_temperature: ['alto', 'médio', 'em avaliação'][index % 3],\n    scheduled_expansion_meeting: target ? '05/08/2026 14:30' : null,\n    eligibility_approved: target ? false : index % 5 !== 0,\n    responsible_expansion_team: 'Expansão Casa do Construtor',\n    operational_follow_up_note: 'Confirmar somente os dados presentes neste registro; não inferir cidade, capital, data, horário ou aprovação.',\n    record_created_at: '2026-07-' + String((index % 28) + 1).padStart(2, '0') + 'T09:00:00-03:00'\n  });\n}\nreturn JSON.stringify({\n  dataset_name: 'Leads de expansão — laboratório local',\n  query_received: query,\n  total_records: records.length,\n  records\n});",
-        "specifyInputSchema": true,
-        "schemaType": "manual",
-        "inputSchema": "{\"type\":\"object\",\"properties\":{\"query\":{\"type\":\"string\",\"description\":\"Identificador exato do lead a localizar\"}},\"required\":[\"query\"]}"
-      },
-      "id": "tool-balanced-68318949-7b8e-464a-9750-bdb2fdfee819",
-      "name": "Base 60 Leads — Balanced",
-      "type": "@n8n/n8n-nodes-langchain.toolCode",
-      "typeVersion": 1.3,
-      "position": [
-        -430,
-        370
-      ]
-    },
-    {
-      "parameters": {
-        "assignments": {
-          "assignments": [
-            {
-              "id": "output-balanced",
-              "name": "balanced_output",
-              "value": "={{ $('Agente — Balanced').item.json.output }}",
-              "type": "string"
-            }
-          ]
-        },
-        "options": {}
-      },
-      "id": "result-balanced-65f37ee7-a069-4244-81fb-2f81819f17db",
-      "name": "Resultado — Balanced",
-      "type": "n8n-nodes-base.set",
-      "typeVersion": 3.4,
-      "position": [
-        -160,
-        180
-      ]
-    },
-    {
-      "parameters": {
-        "promptType": "define",
-        "text": "={{ $('Entrada Única').item.json.chatInput }}",
-        "options": {
-          "systemMessage": "Você é um agente de validação de dados.\nPara toda mensagem recebida, execute exatamente uma vez a tool consultar_base_leads.\nLocalize exclusivamente o registro LEAD-1942. Não use conhecimento externo e não invente dados.\nResponda exatamente em cinco linhas, sem introdução e sem Markdown:\nLead: [lead_identifier]\nCidade: [franchise_city_of_interest]\nCapital: [declared_available_investment_capital]\nReunião: [scheduled_expansion_meeting]\nAprovado: [eligibility_approved em minúsculas]",
-          "maxIterations": 3,
-          "returnIntermediateSteps": false,
-          "enableStreaming": false
-        }
-      },
-      "id": "agent-maximum-fd262b3a-257a-4a06-a793-1de2518c3eb1",
-      "name": "Agente — Maximum Savings",
-      "type": "@n8n/n8n-nodes-langchain.agent",
-      "typeVersion": 3.1,
-      "position": [
-        -760,
-        540
-      ]
-    },
-    {
-      "parameters": {
-        "modelName": "models/gemini-2.5-flash",
-        "options": {
-          "temperature": 0,
-          "maxOutputTokens": 2048
-        }
-      },
-      "id": "gemini-maximum-b6c27787-602f-4d14-b054-ed834ac383d8",
-      "name": "Gemini — Maximum Savings",
-      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
-      "typeVersion": 1.1,
-      "position": [
-        -900,
-        730
-      ]
-    },
-    {
-      "parameters": {
-        "behavior": "optimizeAndMeasure",
-        "profile": "aggressive"
-      },
-      "id": "wrapper-maximum-dbcf8f5c-429e-41e7-8fa0-28c7068e6e99",
-      "name": "Token Saver — Maximum Savings",
-      "type": "n8n-nodes-context-optimizer.optimizedChatModel",
-      "typeVersion": 1,
-      "position": [
-        -680,
-        730
-      ]
-    },
-    {
-      "parameters": {
-        "name": "consultar_base_leads",
-        "description": "Obrigatória. Retorna a base completa de leads. Use uma vez e localize o lead_identifier solicitado.",
-        "language": "javaScript",
-        "jsCode": "const records = [];\nfor (let index = 0; index < 60; index += 1) {\n  const numericId = 1900 + index;\n  const target = numericId === 1942;\n  records.push({\n    lead_identifier: 'LEAD-' + numericId,\n    contact_full_name: target ? 'Marina Oliveira' : 'Lead Demonstração ' + numericId,\n    contact_email_address: target ? 'marina.oliveira@example.com' : 'lead' + numericId + '@example.com',\n    franchise_city_of_interest: target ? 'Campinas/SP' : ['Curitiba/PR', 'Goiânia/GO', 'Londrina/PR', 'Sorocaba/SP'][index % 4],\n    declared_available_investment_capital: target ? 'R$ 850.000,00' : 'R$ ' + (450000 + (index % 8) * 50000).toLocaleString('pt-BR') + ',00',\n    commercial_pipeline_stage: ['Novo lead', 'Qualificação', 'Reunião pendente'][index % 3],\n    acquisition_source_channel: ['Site institucional', 'Landing page', 'Indicação'][index % 3],\n    franchise_interest_temperature: ['alto', 'médio', 'em avaliação'][index % 3],\n    scheduled_expansion_meeting: target ? '05/08/2026 14:30' : null,\n    eligibility_approved: target ? false : index % 5 !== 0,\n    responsible_expansion_team: 'Expansão Casa do Construtor',\n    operational_follow_up_note: 'Confirmar somente os dados presentes neste registro; não inferir cidade, capital, data, horário ou aprovação.',\n    record_created_at: '2026-07-' + String((index % 28) + 1).padStart(2, '0') + 'T09:00:00-03:00'\n  });\n}\nreturn JSON.stringify({\n  dataset_name: 'Leads de expansão — laboratório local',\n  query_received: query,\n  total_records: records.length,\n  records\n});",
-        "specifyInputSchema": true,
-        "schemaType": "manual",
-        "inputSchema": "{\"type\":\"object\",\"properties\":{\"query\":{\"type\":\"string\",\"description\":\"Identificador exato do lead a localizar\"}},\"required\":[\"query\"]}"
-      },
-      "id": "tool-maximum-3ecb141b-13c0-4a5f-9611-e1b24fb1ff0c",
-      "name": "Base 60 Leads — Maximum Savings",
-      "type": "@n8n/n8n-nodes-langchain.toolCode",
-      "typeVersion": 1.3,
-      "position": [
-        -430,
-        730
-      ]
-    },
-    {
-      "parameters": {
-        "assignments": {
-          "assignments": [
-            {
-              "id": "output-maximum",
-              "name": "maximum_output",
-              "value": "={{ $('Agente — Maximum Savings').item.json.output }}",
-              "type": "string"
-            }
-          ]
-        },
-        "options": {}
-      },
-      "id": "result-maximum-33e09fd4-3e29-4dfd-9ba0-cbf9ef1f412f",
-      "name": "Resultado — Maximum Savings",
-      "type": "n8n-nodes-base.set",
-      "typeVersion": 3.4,
-      "position": [
-        -160,
-        540
-      ]
-    },
-    {
-      "parameters": {
-        "mode": "combine",
-        "combineBy": "combineByPosition",
-        "options": {}
-      },
-      "id": "merge-quality",
-      "name": "Unir Baseline + Quality",
-      "type": "n8n-nodes-base.merge",
-      "typeVersion": 3.2,
-      "position": [
-        120,
-        -360
-      ]
-    },
-    {
-      "parameters": {
-        "mode": "combine",
-        "combineBy": "combineByPosition",
-        "options": {}
-      },
-      "id": "merge-balanced",
-      "name": "Unir + Balanced",
-      "type": "n8n-nodes-base.merge",
-      "typeVersion": 3.2,
-      "position": [
-        340,
-        -140
-      ]
-    },
-    {
-      "parameters": {
-        "mode": "combine",
-        "combineBy": "combineByPosition",
-        "options": {}
-      },
-      "id": "merge-maximum",
-      "name": "Unir + Maximum",
-      "type": "n8n-nodes-base.merge",
-      "typeVersion": 3.2,
-      "position": [
-        560,
-        80
-      ]
-    },
-    {
-      "parameters": {
-        "operation": "compareCurrentExecution",
-        "baselineModelNode": "Token Saver — Baseline",
-        "optimizedModelNode": "Token Saver — Maximum Quality",
-        "outputDetail": "simple"
-      },
-      "id": "metric-quality-4a716a2f-8bce-4163-9722-a826d01e23a4",
-      "name": "Economia — Maximum Quality",
-      "type": "n8n-nodes-context-optimizer.tokenAnalytics",
-      "typeVersion": 1,
-      "position": [
-        800,
-        80
-      ]
-    },
-    {
-      "parameters": {
-        "operation": "compareCurrentExecution",
-        "baselineModelNode": "Token Saver — Baseline",
-        "optimizedModelNode": "Token Saver — Balanced",
-        "outputDetail": "simple"
-      },
-      "id": "metric-balanced-2310451c-aae9-468c-be12-aa134499ac4c",
-      "name": "Economia — Balanced",
-      "type": "n8n-nodes-context-optimizer.tokenAnalytics",
-      "typeVersion": 1,
-      "position": [
-        1020,
-        80
-      ]
-    },
-    {
-      "parameters": {
-        "operation": "compareCurrentExecution",
-        "baselineModelNode": "Token Saver — Baseline",
-        "optimizedModelNode": "Token Saver — Maximum Savings",
-        "outputDetail": "simple"
-      },
-      "id": "metric-maximum-0ba2fbf1-5629-4737-9901-e98d7150418a",
-      "name": "Economia — Maximum Savings",
-      "type": "n8n-nodes-context-optimizer.tokenAnalytics",
-      "typeVersion": 1,
-      "position": [
-        1240,
-        80
-      ]
-    },
-    {
-      "parameters": {
-        "mode": "runOnceForAllItems",
-        "language": "javaScript",
-        "jsCode": "const profiles = [\n  { key: 'quality', label: 'Maximum Quality', result: 'Resultado — Maximum Quality', metric: 'Economia — Maximum Quality' },\n  { key: 'balanced', label: 'Balanced', result: 'Resultado — Balanced', metric: 'Economia — Balanced' },\n  { key: 'maximum', label: 'Maximum Savings', result: 'Resultado — Maximum Savings', metric: 'Economia — Maximum Savings' }\n];\nconst baseline = String($('Resultado — Baseline').first().json.baseline_output || '');\nconst expected = [\"LEAD-1942\",\"Campinas/SP\",\"R$ 850.000,00\",\"05/08/2026 14:30\",\"false\"];\nconst normalize = (value) => String(value || '').normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').toLowerCase();\nconst rows = profiles.map((profile) => {\n  const output = String($(profile.result).first().json[profile.key + '_output'] || '');\n  const savings = $(profile.metric).first().json.tokenSavings || {};\n  const factsPreserved = expected.every((fact) => normalize(output).includes(normalize(fact)));\n  return { profile: profile.label, ...savings, factsPreserved, outputMatchesBaseline: output === baseline };\n});\nconst report = ['## Comparação real — 60 registros'];\nfor (const row of rows) report.push('**' + row.profile + ':** ' + row.before + ' → ' + row.after + ' tokens; economia ' + row.percent + '%; fatos 5/5: ' + (row.factsPreserved ? 'sim' : 'não'));\nreturn [{ json: {\n  output: report.join('\\n'),\n  datasetRecords: 60,\n  model: 'models/gemini-2.5-flash',\n  measurement: 'provider',\n  baselineOutput: baseline,\n  profiles: rows,\n  allFactsPreserved: rows.every((row) => row.factsPreserved),\n  allOutputsMatchBaseline: rows.every((row) => row.outputMatchesBaseline)\n} }];"
-      },
-      "id": "profile-final-report",
-      "name": "Resultado Real dos Perfis",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        1480,
-        80
-      ]
-    }
-  ],
-  "connections": {
-    "Executar Comparação de Perfis": {
-      "main": [
-        [
-          {
-            "node": "Entrada Única",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Entrada Única": {
-      "main": [
-        [
-          {
-            "node": "Agente — Baseline",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "Agente — Maximum Quality",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "Agente — Balanced",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "Agente — Maximum Savings",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Gemini — Baseline": {
-      "ai_languageModel": [
-        [
-          {
-            "node": "Token Saver — Baseline",
-            "type": "ai_languageModel",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Token Saver — Baseline": {
-      "ai_languageModel": [
-        [
-          {
-            "node": "Agente — Baseline",
-            "type": "ai_languageModel",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Base 60 Leads — Baseline": {
-      "ai_tool": [
-        [
-          {
-            "node": "Agente — Baseline",
-            "type": "ai_tool",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Agente — Baseline": {
-      "main": [
-        [
-          {
-            "node": "Resultado — Baseline",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Gemini — Maximum Quality": {
-      "ai_languageModel": [
-        [
-          {
-            "node": "Token Saver — Maximum Quality",
-            "type": "ai_languageModel",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Token Saver — Maximum Quality": {
-      "ai_languageModel": [
-        [
-          {
-            "node": "Agente — Maximum Quality",
-            "type": "ai_languageModel",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Base 60 Leads — Maximum Quality": {
-      "ai_tool": [
-        [
-          {
-            "node": "Agente — Maximum Quality",
-            "type": "ai_tool",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Agente — Maximum Quality": {
-      "main": [
-        [
-          {
-            "node": "Resultado — Maximum Quality",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Gemini — Balanced": {
-      "ai_languageModel": [
-        [
-          {
-            "node": "Token Saver — Balanced",
-            "type": "ai_languageModel",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Token Saver — Balanced": {
-      "ai_languageModel": [
-        [
-          {
-            "node": "Agente — Balanced",
-            "type": "ai_languageModel",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Base 60 Leads — Balanced": {
-      "ai_tool": [
-        [
-          {
-            "node": "Agente — Balanced",
-            "type": "ai_tool",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Agente — Balanced": {
-      "main": [
-        [
-          {
-            "node": "Resultado — Balanced",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Gemini — Maximum Savings": {
-      "ai_languageModel": [
-        [
-          {
-            "node": "Token Saver — Maximum Savings",
-            "type": "ai_languageModel",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Token Saver — Maximum Savings": {
-      "ai_languageModel": [
-        [
-          {
-            "node": "Agente — Maximum Savings",
-            "type": "ai_languageModel",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Base 60 Leads — Maximum Savings": {
-      "ai_tool": [
-        [
-          {
-            "node": "Agente — Maximum Savings",
-            "type": "ai_tool",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Agente — Maximum Savings": {
-      "main": [
-        [
-          {
-            "node": "Resultado — Maximum Savings",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Resultado — Baseline": {
-      "main": [
-        [
-          {
-            "node": "Unir Baseline + Quality",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Resultado — Maximum Quality": {
-      "main": [
-        [
-          {
-            "node": "Unir Baseline + Quality",
-            "type": "main",
-            "index": 1
-          }
-        ]
-      ]
-    },
-    "Unir Baseline + Quality": {
-      "main": [
-        [
-          {
-            "node": "Unir + Balanced",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Resultado — Balanced": {
-      "main": [
-        [
-          {
-            "node": "Unir + Balanced",
-            "type": "main",
-            "index": 1
-          }
-        ]
-      ]
-    },
-    "Unir + Balanced": {
-      "main": [
-        [
-          {
-            "node": "Unir + Maximum",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Resultado — Maximum Savings": {
-      "main": [
-        [
-          {
-            "node": "Unir + Maximum",
-            "type": "main",
-            "index": 1
-          }
-        ]
-      ]
-    },
-    "Unir + Maximum": {
-      "main": [
-        [
-          {
-            "node": "Economia — Maximum Quality",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Economia — Maximum Quality": {
-      "main": [
-        [
-          {
-            "node": "Economia — Balanced",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Economia — Balanced": {
-      "main": [
-        [
-          {
-            "node": "Economia — Maximum Savings",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Economia — Maximum Savings": {
-      "main": [
-        [
-          {
-            "node": "Resultado Real dos Perfis",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    }
-  },
-  "settings": {
-    "executionOrder": "v1",
-    "saveDataErrorExecution": "all",
-    "saveDataSuccessExecution": "all"
-  },
-  "staticData": null,
-  "meta": {
-    "templateCredsSetupCompleted": true
-  },
-  "versionId": "7e7a6752-87ff-4a45-8e2f-6460b2b9cde9",
-  "tags": []
+    "id":  "tokenSaverProfileComparison60",
+    "name":  "[LAB] Token Saver — Comparação dos Perfis (60 registros)",
+    "active":  false,
+    "nodes":  [
+                  {
+                      "parameters":  {
+                                         "content":  "## Comparação econômica dos perfis\n\nUm baseline compartilhado + Maximum Quality + Balanced + Maximum Savings. Mesmos 60 registros, pergunta, Gemini 2.5 Flash e temperatura 0. Métrica: tokens reais informados pelo provider.",
+                                         "height":  1180,
+                                         "width":  3100,
+                                         "color":  5
+                                     },
+                      "id":  "profile-test-note",
+                      "name":  "Teste controlado",
+                      "type":  "n8n-nodes-base.stickyNote",
+                      "typeVersion":  1,
+                      "position":  [
+                                       -1380,
+                                       -720
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "httpMethod":  "POST",
+                                         "path":  "token-saver-profile-comparison-60",
+                                         "responseMode":  "lastNode",
+                                         "options":  {
+
+                                                     }
+                                     },
+                      "id":  "profile-comparison-webhook",
+                      "name":  "Executar Comparação de Perfis",
+                      "type":  "n8n-nodes-base.webhook",
+                      "typeVersion":  2,
+                      "position":  [
+                                       -1320,
+                                       0
+                                   ],
+                      "webhookId":  "995d8374-a3ee-4517-b3bd-c7e8bcc09cd1"
+                  },
+                  {
+                      "parameters":  {
+                                         "assignments":  {
+                                                             "assignments":  [
+                                                                                 {
+                                                                                     "id":  "chat-input",
+                                                                                     "name":  "chatInput",
+                                                                                     "value":  "Consulte o lead LEAD-1942.",
+                                                                                     "type":  "string"
+                                                                                 }
+                                                                             ]
+                                                         },
+                                         "options":  {
+
+                                                     }
+                                     },
+                      "id":  "profile-normalize",
+                      "name":  "Entrada Única",
+                      "type":  "n8n-nodes-base.set",
+                      "typeVersion":  3.4,
+                      "position":  [
+                                       -1100,
+                                       0
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "promptType":  "define",
+                                         "text":  "={{ $(\u0027Entrada Única\u0027).item.json.chatInput }}",
+                                         "options":  {
+                                                         "systemMessage":  "Você é um agente de validação de dados.\nPara toda mensagem recebida, execute exatamente uma vez a tool consultar_base_leads.\nLocalize exclusivamente o registro LEAD-1942. Não use conhecimento externo e não invente dados.\nResponda exatamente em cinco linhas, sem introdução e sem Markdown:\nLead: [lead_identifier]\nCidade: [franchise_city_of_interest]\nCapital: [declared_available_investment_capital]\nReunião: [scheduled_expansion_meeting]\nAprovado: [eligibility_approved em minúsculas]",
+                                                         "maxIterations":  3,
+                                                         "returnIntermediateSteps":  false,
+                                                         "enableStreaming":  false
+                                                     }
+                                     },
+                      "id":  "agent-baseline-8b6d9893-2b76-463d-8f8a-dd6ef59943dd",
+                      "name":  "Agente — Baseline",
+                      "type":  "@n8n/n8n-nodes-langchain.agent",
+                      "typeVersion":  3.1,
+                      "position":  [
+                                       -760,
+                                       -540
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "modelName":  "models/gemini-2.5-flash",
+                                         "options":  {
+                                                         "temperature":  0,
+                                                         "maxOutputTokens":  2048
+                                                     }
+                                     },
+                      "id":  "gemini-baseline-407f30a3-b138-429e-9596-c96fe6802475",
+                      "name":  "Gemini — Baseline",
+                      "type":  "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+                      "typeVersion":  1.1,
+                      "position":  [
+                                       -900,
+                                       -350
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "behavior":  "measureOnly",
+                                         "resource":  "agentModel",
+                                         "operation":  "optimizeAgentModel"
+                                     },
+                      "id":  "wrapper-baseline-7f05ad97-55ed-4e72-b62a-65f9656c5de2",
+                      "name":  "Token Saver — Baseline",
+                      "type":  "n8n-nodes-context-optimizer.contextSaver",
+                      "typeVersion":  3,
+                      "position":  [
+                                       -680,
+                                       -350
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "name":  "consultar_base_leads",
+                                         "description":  "Obrigatória. Retorna a base completa de leads. Use uma vez e localize o lead_identifier solicitado.",
+                                         "language":  "javaScript",
+                                         "jsCode":  "const records = [];\nfor (let index = 0; index \u003c 60; index += 1) {\n  const numericId = 1900 + index;\n  const target = numericId === 1942;\n  records.push({\n    lead_identifier: \u0027LEAD-\u0027 + numericId,\n    contact_full_name: target ? \u0027Marina Oliveira\u0027 : \u0027Lead Demonstração \u0027 + numericId,\n    contact_email_address: target ? \u0027marina.oliveira@example.com\u0027 : \u0027lead\u0027 + numericId + \u0027@example.com\u0027,\n    franchise_city_of_interest: target ? \u0027Campinas/SP\u0027 : [\u0027Curitiba/PR\u0027, \u0027Goiânia/GO\u0027, \u0027Londrina/PR\u0027, \u0027Sorocaba/SP\u0027][index % 4],\n    declared_available_investment_capital: target ? \u0027R$ 850.000,00\u0027 : \u0027R$ \u0027 + (450000 + (index % 8) * 50000).toLocaleString(\u0027pt-BR\u0027) + \u0027,00\u0027,\n    commercial_pipeline_stage: [\u0027Novo lead\u0027, \u0027Qualificação\u0027, \u0027Reunião pendente\u0027][index % 3],\n    acquisition_source_channel: [\u0027Site institucional\u0027, \u0027Landing page\u0027, \u0027Indicação\u0027][index % 3],\n    franchise_interest_temperature: [\u0027alto\u0027, \u0027médio\u0027, \u0027em avaliação\u0027][index % 3],\n    scheduled_expansion_meeting: target ? \u002705/08/2026 14:30\u0027 : null,\n    eligibility_approved: target ? false : index % 5 !== 0,\n    responsible_expansion_team: \u0027Expansão Casa do Construtor\u0027,\n    operational_follow_up_note: \u0027Confirmar somente os dados presentes neste registro; não inferir cidade, capital, data, horário ou aprovação.\u0027,\n    record_created_at: \u00272026-07-\u0027 + String((index % 28) + 1).padStart(2, \u00270\u0027) + \u0027T09:00:00-03:00\u0027\n  });\n}\nreturn JSON.stringify({\n  dataset_name: \u0027Leads de expansão — laboratório local\u0027,\n  query_received: query,\n  total_records: records.length,\n  records\n});",
+                                         "specifyInputSchema":  true,
+                                         "schemaType":  "manual",
+                                         "inputSchema":  "{\"type\":\"object\",\"properties\":{\"query\":{\"type\":\"string\",\"description\":\"Identificador exato do lead a localizar\"}},\"required\":[\"query\"]}"
+                                     },
+                      "id":  "tool-baseline-54e65b28-d6f7-48d0-8dd6-1df3f266336b",
+                      "name":  "Base 60 Leads — Baseline",
+                      "type":  "@n8n/n8n-nodes-langchain.toolCode",
+                      "typeVersion":  1.3,
+                      "position":  [
+                                       -430,
+                                       -350
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "assignments":  {
+                                                             "assignments":  [
+                                                                                 {
+                                                                                     "id":  "output-baseline",
+                                                                                     "name":  "baseline_output",
+                                                                                     "value":  "={{ $(\u0027Agente — Baseline\u0027).item.json.output }}",
+                                                                                     "type":  "string"
+                                                                                 }
+                                                                             ]
+                                                         },
+                                         "options":  {
+
+                                                     }
+                                     },
+                      "id":  "result-baseline-6913c641-fe41-499f-b780-44d7df89b772",
+                      "name":  "Resultado — Baseline",
+                      "type":  "n8n-nodes-base.set",
+                      "typeVersion":  3.4,
+                      "position":  [
+                                       -160,
+                                       -540
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "promptType":  "define",
+                                         "text":  "={{ $(\u0027Entrada Única\u0027).item.json.chatInput }}",
+                                         "options":  {
+                                                         "systemMessage":  "Você é um agente de validação de dados.\nPara toda mensagem recebida, execute exatamente uma vez a tool consultar_base_leads.\nLocalize exclusivamente o registro LEAD-1942. Não use conhecimento externo e não invente dados.\nResponda exatamente em cinco linhas, sem introdução e sem Markdown:\nLead: [lead_identifier]\nCidade: [franchise_city_of_interest]\nCapital: [declared_available_investment_capital]\nReunião: [scheduled_expansion_meeting]\nAprovado: [eligibility_approved em minúsculas]",
+                                                         "maxIterations":  3,
+                                                         "returnIntermediateSteps":  false,
+                                                         "enableStreaming":  false
+                                                     }
+                                     },
+                      "id":  "agent-quality-700488bd-628b-4a86-9fec-a52052ea03e1",
+                      "name":  "Agente — Maximum Quality",
+                      "type":  "@n8n/n8n-nodes-langchain.agent",
+                      "typeVersion":  3.1,
+                      "position":  [
+                                       -760,
+                                       -180
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "modelName":  "models/gemini-2.5-flash",
+                                         "options":  {
+                                                         "temperature":  0,
+                                                         "maxOutputTokens":  2048
+                                                     }
+                                     },
+                      "id":  "gemini-quality-58a4f1dd-39b1-40e8-8e00-07085ae20658",
+                      "name":  "Gemini — Maximum Quality",
+                      "type":  "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+                      "typeVersion":  1.1,
+                      "position":  [
+                                       -900,
+                                       10
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "behavior":  "optimizeAndMeasure",
+                                         "profile":  "safe",
+                                         "resource":  "agentModel",
+                                         "operation":  "optimizeAgentModel"
+                                     },
+                      "id":  "wrapper-quality-98185d3f-5e64-4f65-ade4-aedf0a0e375f",
+                      "name":  "Token Saver — Maximum Quality",
+                      "type":  "n8n-nodes-context-optimizer.contextSaver",
+                      "typeVersion":  3,
+                      "position":  [
+                                       -680,
+                                       10
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "name":  "consultar_base_leads",
+                                         "description":  "Obrigatória. Retorna a base completa de leads. Use uma vez e localize o lead_identifier solicitado.",
+                                         "language":  "javaScript",
+                                         "jsCode":  "const records = [];\nfor (let index = 0; index \u003c 60; index += 1) {\n  const numericId = 1900 + index;\n  const target = numericId === 1942;\n  records.push({\n    lead_identifier: \u0027LEAD-\u0027 + numericId,\n    contact_full_name: target ? \u0027Marina Oliveira\u0027 : \u0027Lead Demonstração \u0027 + numericId,\n    contact_email_address: target ? \u0027marina.oliveira@example.com\u0027 : \u0027lead\u0027 + numericId + \u0027@example.com\u0027,\n    franchise_city_of_interest: target ? \u0027Campinas/SP\u0027 : [\u0027Curitiba/PR\u0027, \u0027Goiânia/GO\u0027, \u0027Londrina/PR\u0027, \u0027Sorocaba/SP\u0027][index % 4],\n    declared_available_investment_capital: target ? \u0027R$ 850.000,00\u0027 : \u0027R$ \u0027 + (450000 + (index % 8) * 50000).toLocaleString(\u0027pt-BR\u0027) + \u0027,00\u0027,\n    commercial_pipeline_stage: [\u0027Novo lead\u0027, \u0027Qualificação\u0027, \u0027Reunião pendente\u0027][index % 3],\n    acquisition_source_channel: [\u0027Site institucional\u0027, \u0027Landing page\u0027, \u0027Indicação\u0027][index % 3],\n    franchise_interest_temperature: [\u0027alto\u0027, \u0027médio\u0027, \u0027em avaliação\u0027][index % 3],\n    scheduled_expansion_meeting: target ? \u002705/08/2026 14:30\u0027 : null,\n    eligibility_approved: target ? false : index % 5 !== 0,\n    responsible_expansion_team: \u0027Expansão Casa do Construtor\u0027,\n    operational_follow_up_note: \u0027Confirmar somente os dados presentes neste registro; não inferir cidade, capital, data, horário ou aprovação.\u0027,\n    record_created_at: \u00272026-07-\u0027 + String((index % 28) + 1).padStart(2, \u00270\u0027) + \u0027T09:00:00-03:00\u0027\n  });\n}\nreturn JSON.stringify({\n  dataset_name: \u0027Leads de expansão — laboratório local\u0027,\n  query_received: query,\n  total_records: records.length,\n  records\n});",
+                                         "specifyInputSchema":  true,
+                                         "schemaType":  "manual",
+                                         "inputSchema":  "{\"type\":\"object\",\"properties\":{\"query\":{\"type\":\"string\",\"description\":\"Identificador exato do lead a localizar\"}},\"required\":[\"query\"]}"
+                                     },
+                      "id":  "tool-quality-6fd16474-76b1-47e3-b508-fd07fe6ff385",
+                      "name":  "Base 60 Leads — Maximum Quality",
+                      "type":  "@n8n/n8n-nodes-langchain.toolCode",
+                      "typeVersion":  1.3,
+                      "position":  [
+                                       -430,
+                                       10
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "assignments":  {
+                                                             "assignments":  [
+                                                                                 {
+                                                                                     "id":  "output-quality",
+                                                                                     "name":  "quality_output",
+                                                                                     "value":  "={{ $(\u0027Agente — Maximum Quality\u0027).item.json.output }}",
+                                                                                     "type":  "string"
+                                                                                 }
+                                                                             ]
+                                                         },
+                                         "options":  {
+
+                                                     }
+                                     },
+                      "id":  "result-quality-53ac6271-074c-4a4e-8040-edb27c84c66f",
+                      "name":  "Resultado — Maximum Quality",
+                      "type":  "n8n-nodes-base.set",
+                      "typeVersion":  3.4,
+                      "position":  [
+                                       -160,
+                                       -180
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "promptType":  "define",
+                                         "text":  "={{ $(\u0027Entrada Única\u0027).item.json.chatInput }}",
+                                         "options":  {
+                                                         "systemMessage":  "Você é um agente de validação de dados.\nPara toda mensagem recebida, execute exatamente uma vez a tool consultar_base_leads.\nLocalize exclusivamente o registro LEAD-1942. Não use conhecimento externo e não invente dados.\nResponda exatamente em cinco linhas, sem introdução e sem Markdown:\nLead: [lead_identifier]\nCidade: [franchise_city_of_interest]\nCapital: [declared_available_investment_capital]\nReunião: [scheduled_expansion_meeting]\nAprovado: [eligibility_approved em minúsculas]",
+                                                         "maxIterations":  3,
+                                                         "returnIntermediateSteps":  false,
+                                                         "enableStreaming":  false
+                                                     }
+                                     },
+                      "id":  "agent-balanced-864cb1db-23d5-43f4-a96e-086d8836c7e2",
+                      "name":  "Agente — Balanced",
+                      "type":  "@n8n/n8n-nodes-langchain.agent",
+                      "typeVersion":  3.1,
+                      "position":  [
+                                       -760,
+                                       180
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "modelName":  "models/gemini-2.5-flash",
+                                         "options":  {
+                                                         "temperature":  0,
+                                                         "maxOutputTokens":  2048
+                                                     }
+                                     },
+                      "id":  "gemini-balanced-27ca50f7-05d3-478b-acc2-dfe61d97ebef",
+                      "name":  "Gemini — Balanced",
+                      "type":  "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+                      "typeVersion":  1.1,
+                      "position":  [
+                                       -900,
+                                       370
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "behavior":  "optimizeAndMeasure",
+                                         "profile":  "balanced",
+                                         "resource":  "agentModel",
+                                         "operation":  "optimizeAgentModel"
+                                     },
+                      "id":  "wrapper-balanced-9f5e64ef-dcc4-4767-ad5e-2dcd76afcddb",
+                      "name":  "Token Saver — Balanced",
+                      "type":  "n8n-nodes-context-optimizer.contextSaver",
+                      "typeVersion":  3,
+                      "position":  [
+                                       -680,
+                                       370
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "name":  "consultar_base_leads",
+                                         "description":  "Obrigatória. Retorna a base completa de leads. Use uma vez e localize o lead_identifier solicitado.",
+                                         "language":  "javaScript",
+                                         "jsCode":  "const records = [];\nfor (let index = 0; index \u003c 60; index += 1) {\n  const numericId = 1900 + index;\n  const target = numericId === 1942;\n  records.push({\n    lead_identifier: \u0027LEAD-\u0027 + numericId,\n    contact_full_name: target ? \u0027Marina Oliveira\u0027 : \u0027Lead Demonstração \u0027 + numericId,\n    contact_email_address: target ? \u0027marina.oliveira@example.com\u0027 : \u0027lead\u0027 + numericId + \u0027@example.com\u0027,\n    franchise_city_of_interest: target ? \u0027Campinas/SP\u0027 : [\u0027Curitiba/PR\u0027, \u0027Goiânia/GO\u0027, \u0027Londrina/PR\u0027, \u0027Sorocaba/SP\u0027][index % 4],\n    declared_available_investment_capital: target ? \u0027R$ 850.000,00\u0027 : \u0027R$ \u0027 + (450000 + (index % 8) * 50000).toLocaleString(\u0027pt-BR\u0027) + \u0027,00\u0027,\n    commercial_pipeline_stage: [\u0027Novo lead\u0027, \u0027Qualificação\u0027, \u0027Reunião pendente\u0027][index % 3],\n    acquisition_source_channel: [\u0027Site institucional\u0027, \u0027Landing page\u0027, \u0027Indicação\u0027][index % 3],\n    franchise_interest_temperature: [\u0027alto\u0027, \u0027médio\u0027, \u0027em avaliação\u0027][index % 3],\n    scheduled_expansion_meeting: target ? \u002705/08/2026 14:30\u0027 : null,\n    eligibility_approved: target ? false : index % 5 !== 0,\n    responsible_expansion_team: \u0027Expansão Casa do Construtor\u0027,\n    operational_follow_up_note: \u0027Confirmar somente os dados presentes neste registro; não inferir cidade, capital, data, horário ou aprovação.\u0027,\n    record_created_at: \u00272026-07-\u0027 + String((index % 28) + 1).padStart(2, \u00270\u0027) + \u0027T09:00:00-03:00\u0027\n  });\n}\nreturn JSON.stringify({\n  dataset_name: \u0027Leads de expansão — laboratório local\u0027,\n  query_received: query,\n  total_records: records.length,\n  records\n});",
+                                         "specifyInputSchema":  true,
+                                         "schemaType":  "manual",
+                                         "inputSchema":  "{\"type\":\"object\",\"properties\":{\"query\":{\"type\":\"string\",\"description\":\"Identificador exato do lead a localizar\"}},\"required\":[\"query\"]}"
+                                     },
+                      "id":  "tool-balanced-68318949-7b8e-464a-9750-bdb2fdfee819",
+                      "name":  "Base 60 Leads — Balanced",
+                      "type":  "@n8n/n8n-nodes-langchain.toolCode",
+                      "typeVersion":  1.3,
+                      "position":  [
+                                       -430,
+                                       370
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "assignments":  {
+                                                             "assignments":  [
+                                                                                 {
+                                                                                     "id":  "output-balanced",
+                                                                                     "name":  "balanced_output",
+                                                                                     "value":  "={{ $(\u0027Agente — Balanced\u0027).item.json.output }}",
+                                                                                     "type":  "string"
+                                                                                 }
+                                                                             ]
+                                                         },
+                                         "options":  {
+
+                                                     }
+                                     },
+                      "id":  "result-balanced-65f37ee7-a069-4244-81fb-2f81819f17db",
+                      "name":  "Resultado — Balanced",
+                      "type":  "n8n-nodes-base.set",
+                      "typeVersion":  3.4,
+                      "position":  [
+                                       -160,
+                                       180
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "promptType":  "define",
+                                         "text":  "={{ $(\u0027Entrada Única\u0027).item.json.chatInput }}",
+                                         "options":  {
+                                                         "systemMessage":  "Você é um agente de validação de dados.\nPara toda mensagem recebida, execute exatamente uma vez a tool consultar_base_leads.\nLocalize exclusivamente o registro LEAD-1942. Não use conhecimento externo e não invente dados.\nResponda exatamente em cinco linhas, sem introdução e sem Markdown:\nLead: [lead_identifier]\nCidade: [franchise_city_of_interest]\nCapital: [declared_available_investment_capital]\nReunião: [scheduled_expansion_meeting]\nAprovado: [eligibility_approved em minúsculas]",
+                                                         "maxIterations":  3,
+                                                         "returnIntermediateSteps":  false,
+                                                         "enableStreaming":  false
+                                                     }
+                                     },
+                      "id":  "agent-maximum-fd262b3a-257a-4a06-a793-1de2518c3eb1",
+                      "name":  "Agente — Maximum Savings",
+                      "type":  "@n8n/n8n-nodes-langchain.agent",
+                      "typeVersion":  3.1,
+                      "position":  [
+                                       -760,
+                                       540
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "modelName":  "models/gemini-2.5-flash",
+                                         "options":  {
+                                                         "temperature":  0,
+                                                         "maxOutputTokens":  2048
+                                                     }
+                                     },
+                      "id":  "gemini-maximum-b6c27787-602f-4d14-b054-ed834ac383d8",
+                      "name":  "Gemini — Maximum Savings",
+                      "type":  "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+                      "typeVersion":  1.1,
+                      "position":  [
+                                       -900,
+                                       730
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "behavior":  "optimizeAndMeasure",
+                                         "profile":  "aggressive",
+                                         "resource":  "agentModel",
+                                         "operation":  "optimizeAgentModel"
+                                     },
+                      "id":  "wrapper-maximum-dbcf8f5c-429e-41e7-8fa0-28c7068e6e99",
+                      "name":  "Token Saver — Maximum Savings",
+                      "type":  "n8n-nodes-context-optimizer.contextSaver",
+                      "typeVersion":  3,
+                      "position":  [
+                                       -680,
+                                       730
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "name":  "consultar_base_leads",
+                                         "description":  "Obrigatória. Retorna a base completa de leads. Use uma vez e localize o lead_identifier solicitado.",
+                                         "language":  "javaScript",
+                                         "jsCode":  "const records = [];\nfor (let index = 0; index \u003c 60; index += 1) {\n  const numericId = 1900 + index;\n  const target = numericId === 1942;\n  records.push({\n    lead_identifier: \u0027LEAD-\u0027 + numericId,\n    contact_full_name: target ? \u0027Marina Oliveira\u0027 : \u0027Lead Demonstração \u0027 + numericId,\n    contact_email_address: target ? \u0027marina.oliveira@example.com\u0027 : \u0027lead\u0027 + numericId + \u0027@example.com\u0027,\n    franchise_city_of_interest: target ? \u0027Campinas/SP\u0027 : [\u0027Curitiba/PR\u0027, \u0027Goiânia/GO\u0027, \u0027Londrina/PR\u0027, \u0027Sorocaba/SP\u0027][index % 4],\n    declared_available_investment_capital: target ? \u0027R$ 850.000,00\u0027 : \u0027R$ \u0027 + (450000 + (index % 8) * 50000).toLocaleString(\u0027pt-BR\u0027) + \u0027,00\u0027,\n    commercial_pipeline_stage: [\u0027Novo lead\u0027, \u0027Qualificação\u0027, \u0027Reunião pendente\u0027][index % 3],\n    acquisition_source_channel: [\u0027Site institucional\u0027, \u0027Landing page\u0027, \u0027Indicação\u0027][index % 3],\n    franchise_interest_temperature: [\u0027alto\u0027, \u0027médio\u0027, \u0027em avaliação\u0027][index % 3],\n    scheduled_expansion_meeting: target ? \u002705/08/2026 14:30\u0027 : null,\n    eligibility_approved: target ? false : index % 5 !== 0,\n    responsible_expansion_team: \u0027Expansão Casa do Construtor\u0027,\n    operational_follow_up_note: \u0027Confirmar somente os dados presentes neste registro; não inferir cidade, capital, data, horário ou aprovação.\u0027,\n    record_created_at: \u00272026-07-\u0027 + String((index % 28) + 1).padStart(2, \u00270\u0027) + \u0027T09:00:00-03:00\u0027\n  });\n}\nreturn JSON.stringify({\n  dataset_name: \u0027Leads de expansão — laboratório local\u0027,\n  query_received: query,\n  total_records: records.length,\n  records\n});",
+                                         "specifyInputSchema":  true,
+                                         "schemaType":  "manual",
+                                         "inputSchema":  "{\"type\":\"object\",\"properties\":{\"query\":{\"type\":\"string\",\"description\":\"Identificador exato do lead a localizar\"}},\"required\":[\"query\"]}"
+                                     },
+                      "id":  "tool-maximum-3ecb141b-13c0-4a5f-9611-e1b24fb1ff0c",
+                      "name":  "Base 60 Leads — Maximum Savings",
+                      "type":  "@n8n/n8n-nodes-langchain.toolCode",
+                      "typeVersion":  1.3,
+                      "position":  [
+                                       -430,
+                                       730
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "assignments":  {
+                                                             "assignments":  [
+                                                                                 {
+                                                                                     "id":  "output-maximum",
+                                                                                     "name":  "maximum_output",
+                                                                                     "value":  "={{ $(\u0027Agente — Maximum Savings\u0027).item.json.output }}",
+                                                                                     "type":  "string"
+                                                                                 }
+                                                                             ]
+                                                         },
+                                         "options":  {
+
+                                                     }
+                                     },
+                      "id":  "result-maximum-33e09fd4-3e29-4dfd-9ba0-cbf9ef1f412f",
+                      "name":  "Resultado — Maximum Savings",
+                      "type":  "n8n-nodes-base.set",
+                      "typeVersion":  3.4,
+                      "position":  [
+                                       -160,
+                                       540
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "mode":  "combine",
+                                         "combineBy":  "combineByPosition",
+                                         "options":  {
+
+                                                     }
+                                     },
+                      "id":  "merge-quality",
+                      "name":  "Unir Baseline + Quality",
+                      "type":  "n8n-nodes-base.merge",
+                      "typeVersion":  3.2,
+                      "position":  [
+                                       120,
+                                       -360
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "mode":  "combine",
+                                         "combineBy":  "combineByPosition",
+                                         "options":  {
+
+                                                     }
+                                     },
+                      "id":  "merge-balanced",
+                      "name":  "Unir + Balanced",
+                      "type":  "n8n-nodes-base.merge",
+                      "typeVersion":  3.2,
+                      "position":  [
+                                       340,
+                                       -140
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "mode":  "combine",
+                                         "combineBy":  "combineByPosition",
+                                         "options":  {
+
+                                                     }
+                                     },
+                      "id":  "merge-maximum",
+                      "name":  "Unir + Maximum",
+                      "type":  "n8n-nodes-base.merge",
+                      "typeVersion":  3.2,
+                      "position":  [
+                                       560,
+                                       80
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "operation":  "compareCurrentExecution",
+                                         "baselineModelNode":  "Token Saver — Baseline",
+                                         "optimizedModelNode":  "Token Saver — Maximum Quality",
+                                         "outputDetail":  "simple",
+                                         "resource":  "savingsReport"
+                                     },
+                      "id":  "metric-quality-4a716a2f-8bce-4163-9722-a826d01e23a4",
+                      "name":  "Economia — Maximum Quality",
+                      "type":  "n8n-nodes-context-optimizer.contextSaver",
+                      "typeVersion":  3,
+                      "position":  [
+                                       800,
+                                       80
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "operation":  "compareCurrentExecution",
+                                         "baselineModelNode":  "Token Saver — Baseline",
+                                         "optimizedModelNode":  "Token Saver — Balanced",
+                                         "outputDetail":  "simple",
+                                         "resource":  "savingsReport"
+                                     },
+                      "id":  "metric-balanced-2310451c-aae9-468c-be12-aa134499ac4c",
+                      "name":  "Economia — Balanced",
+                      "type":  "n8n-nodes-context-optimizer.contextSaver",
+                      "typeVersion":  3,
+                      "position":  [
+                                       1020,
+                                       80
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "operation":  "compareCurrentExecution",
+                                         "baselineModelNode":  "Token Saver — Baseline",
+                                         "optimizedModelNode":  "Token Saver — Maximum Savings",
+                                         "outputDetail":  "simple",
+                                         "resource":  "savingsReport"
+                                     },
+                      "id":  "metric-maximum-0ba2fbf1-5629-4737-9901-e98d7150418a",
+                      "name":  "Economia — Maximum Savings",
+                      "type":  "n8n-nodes-context-optimizer.contextSaver",
+                      "typeVersion":  3,
+                      "position":  [
+                                       1240,
+                                       80
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "mode":  "runOnceForAllItems",
+                                         "language":  "javaScript",
+                                         "jsCode":  "const profiles = [\n  { key: \u0027quality\u0027, label: \u0027Maximum Quality\u0027, result: \u0027Resultado — Maximum Quality\u0027, metric: \u0027Economia — Maximum Quality\u0027 },\n  { key: \u0027balanced\u0027, label: \u0027Balanced\u0027, result: \u0027Resultado — Balanced\u0027, metric: \u0027Economia — Balanced\u0027 },\n  { key: \u0027maximum\u0027, label: \u0027Maximum Savings\u0027, result: \u0027Resultado — Maximum Savings\u0027, metric: \u0027Economia — Maximum Savings\u0027 }\n];\nconst baseline = String($(\u0027Resultado — Baseline\u0027).first().json.baseline_output || \u0027\u0027);\nconst expected = [\"LEAD-1942\",\"Campinas/SP\",\"R$ 850.000,00\",\"05/08/2026 14:30\",\"false\"];\nconst normalize = (value) =\u003e String(value || \u0027\u0027).normalize(\u0027NFD\u0027).replace(/[\\u0300-\\u036f]/g, \u0027\u0027).toLowerCase();\nconst rows = profiles.map((profile) =\u003e {\n  const output = String($(profile.result).first().json[profile.key + \u0027_output\u0027] || \u0027\u0027);\n  const savings = $(profile.metric).first().json.tokenSavings || {};\n  const factsPreserved = expected.every((fact) =\u003e normalize(output).includes(normalize(fact)));\n  return { profile: profile.label, ...savings, factsPreserved, outputMatchesBaseline: output === baseline };\n});\nconst report = [\u0027## Comparação real — 60 registros\u0027];\nfor (const row of rows) report.push(\u0027**\u0027 + row.profile + \u0027:** \u0027 + row.before + \u0027 → \u0027 + row.after + \u0027 tokens; economia \u0027 + row.percent + \u0027%; fatos 5/5: \u0027 + (row.factsPreserved ? \u0027sim\u0027 : \u0027não\u0027));\nreturn [{ json: {\n  output: report.join(\u0027\\n\u0027),\n  datasetRecords: 60,\n  model: \u0027models/gemini-2.5-flash\u0027,\n  measurement: \u0027provider\u0027,\n  baselineOutput: baseline,\n  profiles: rows,\n  allFactsPreserved: rows.every((row) =\u003e row.factsPreserved),\n  allOutputsMatchBaseline: rows.every((row) =\u003e row.outputMatchesBaseline)\n} }];"
+                                     },
+                      "id":  "profile-final-report",
+                      "name":  "Resultado Real dos Perfis",
+                      "type":  "n8n-nodes-base.code",
+                      "typeVersion":  2,
+                      "position":  [
+                                       1480,
+                                       80
+                                   ]
+                  }
+              ],
+    "connections":  {
+                        "Executar Comparação de Perfis":  {
+                                                              "main":  [
+                                                                           [
+                                                                               {
+                                                                                   "node":  "Entrada Única",
+                                                                                   "type":  "main",
+                                                                                   "index":  0
+                                                                               }
+                                                                           ]
+                                                                       ]
+                                                          },
+                        "Entrada Única":  {
+                                              "main":  [
+                                                           [
+                                                               {
+                                                                   "node":  "Agente — Baseline",
+                                                                   "type":  "main",
+                                                                   "index":  0
+                                                               },
+                                                               {
+                                                                   "node":  "Agente — Maximum Quality",
+                                                                   "type":  "main",
+                                                                   "index":  0
+                                                               },
+                                                               {
+                                                                   "node":  "Agente — Balanced",
+                                                                   "type":  "main",
+                                                                   "index":  0
+                                                               },
+                                                               {
+                                                                   "node":  "Agente — Maximum Savings",
+                                                                   "type":  "main",
+                                                                   "index":  0
+                                                               }
+                                                           ]
+                                                       ]
+                                          },
+                        "Gemini — Baseline":  {
+                                                  "ai_languageModel":  [
+                                                                           [
+                                                                               {
+                                                                                   "node":  "Token Saver — Baseline",
+                                                                                   "type":  "ai_languageModel",
+                                                                                   "index":  0
+                                                                               }
+                                                                           ]
+                                                                       ]
+                                              },
+                        "Token Saver — Baseline":  {
+                                                       "ai_languageModel":  [
+                                                                                [
+                                                                                    {
+                                                                                        "node":  "Agente — Baseline",
+                                                                                        "type":  "ai_languageModel",
+                                                                                        "index":  0
+                                                                                    }
+                                                                                ]
+                                                                            ]
+                                                   },
+                        "Base 60 Leads — Baseline":  {
+                                                         "ai_tool":  [
+                                                                         [
+                                                                             {
+                                                                                 "node":  "Agente — Baseline",
+                                                                                 "type":  "ai_tool",
+                                                                                 "index":  0
+                                                                             }
+                                                                         ]
+                                                                     ]
+                                                     },
+                        "Agente — Baseline":  {
+                                                  "main":  [
+                                                               [
+                                                                   {
+                                                                       "node":  "Resultado — Baseline",
+                                                                       "type":  "main",
+                                                                       "index":  0
+                                                                   }
+                                                               ]
+                                                           ]
+                                              },
+                        "Gemini — Maximum Quality":  {
+                                                         "ai_languageModel":  [
+                                                                                  [
+                                                                                      {
+                                                                                          "node":  "Token Saver — Maximum Quality",
+                                                                                          "type":  "ai_languageModel",
+                                                                                          "index":  0
+                                                                                      }
+                                                                                  ]
+                                                                              ]
+                                                     },
+                        "Token Saver — Maximum Quality":  {
+                                                              "ai_languageModel":  [
+                                                                                       [
+                                                                                           {
+                                                                                               "node":  "Agente — Maximum Quality",
+                                                                                               "type":  "ai_languageModel",
+                                                                                               "index":  0
+                                                                                           }
+                                                                                       ]
+                                                                                   ]
+                                                          },
+                        "Base 60 Leads — Maximum Quality":  {
+                                                                "ai_tool":  [
+                                                                                [
+                                                                                    {
+                                                                                        "node":  "Agente — Maximum Quality",
+                                                                                        "type":  "ai_tool",
+                                                                                        "index":  0
+                                                                                    }
+                                                                                ]
+                                                                            ]
+                                                            },
+                        "Agente — Maximum Quality":  {
+                                                         "main":  [
+                                                                      [
+                                                                          {
+                                                                              "node":  "Resultado — Maximum Quality",
+                                                                              "type":  "main",
+                                                                              "index":  0
+                                                                          }
+                                                                      ]
+                                                                  ]
+                                                     },
+                        "Gemini — Balanced":  {
+                                                  "ai_languageModel":  [
+                                                                           [
+                                                                               {
+                                                                                   "node":  "Token Saver — Balanced",
+                                                                                   "type":  "ai_languageModel",
+                                                                                   "index":  0
+                                                                               }
+                                                                           ]
+                                                                       ]
+                                              },
+                        "Token Saver — Balanced":  {
+                                                       "ai_languageModel":  [
+                                                                                [
+                                                                                    {
+                                                                                        "node":  "Agente — Balanced",
+                                                                                        "type":  "ai_languageModel",
+                                                                                        "index":  0
+                                                                                    }
+                                                                                ]
+                                                                            ]
+                                                   },
+                        "Base 60 Leads — Balanced":  {
+                                                         "ai_tool":  [
+                                                                         [
+                                                                             {
+                                                                                 "node":  "Agente — Balanced",
+                                                                                 "type":  "ai_tool",
+                                                                                 "index":  0
+                                                                             }
+                                                                         ]
+                                                                     ]
+                                                     },
+                        "Agente — Balanced":  {
+                                                  "main":  [
+                                                               [
+                                                                   {
+                                                                       "node":  "Resultado — Balanced",
+                                                                       "type":  "main",
+                                                                       "index":  0
+                                                                   }
+                                                               ]
+                                                           ]
+                                              },
+                        "Gemini — Maximum Savings":  {
+                                                         "ai_languageModel":  [
+                                                                                  [
+                                                                                      {
+                                                                                          "node":  "Token Saver — Maximum Savings",
+                                                                                          "type":  "ai_languageModel",
+                                                                                          "index":  0
+                                                                                      }
+                                                                                  ]
+                                                                              ]
+                                                     },
+                        "Token Saver — Maximum Savings":  {
+                                                              "ai_languageModel":  [
+                                                                                       [
+                                                                                           {
+                                                                                               "node":  "Agente — Maximum Savings",
+                                                                                               "type":  "ai_languageModel",
+                                                                                               "index":  0
+                                                                                           }
+                                                                                       ]
+                                                                                   ]
+                                                          },
+                        "Base 60 Leads — Maximum Savings":  {
+                                                                "ai_tool":  [
+                                                                                [
+                                                                                    {
+                                                                                        "node":  "Agente — Maximum Savings",
+                                                                                        "type":  "ai_tool",
+                                                                                        "index":  0
+                                                                                    }
+                                                                                ]
+                                                                            ]
+                                                            },
+                        "Agente — Maximum Savings":  {
+                                                         "main":  [
+                                                                      [
+                                                                          {
+                                                                              "node":  "Resultado — Maximum Savings",
+                                                                              "type":  "main",
+                                                                              "index":  0
+                                                                          }
+                                                                      ]
+                                                                  ]
+                                                     },
+                        "Resultado — Baseline":  {
+                                                     "main":  [
+                                                                  [
+                                                                      {
+                                                                          "node":  "Unir Baseline + Quality",
+                                                                          "type":  "main",
+                                                                          "index":  0
+                                                                      }
+                                                                  ]
+                                                              ]
+                                                 },
+                        "Resultado — Maximum Quality":  {
+                                                            "main":  [
+                                                                         [
+                                                                             {
+                                                                                 "node":  "Unir Baseline + Quality",
+                                                                                 "type":  "main",
+                                                                                 "index":  1
+                                                                             }
+                                                                         ]
+                                                                     ]
+                                                        },
+                        "Unir Baseline + Quality":  {
+                                                        "main":  [
+                                                                     [
+                                                                         {
+                                                                             "node":  "Unir + Balanced",
+                                                                             "type":  "main",
+                                                                             "index":  0
+                                                                         }
+                                                                     ]
+                                                                 ]
+                                                    },
+                        "Resultado — Balanced":  {
+                                                     "main":  [
+                                                                  [
+                                                                      {
+                                                                          "node":  "Unir + Balanced",
+                                                                          "type":  "main",
+                                                                          "index":  1
+                                                                      }
+                                                                  ]
+                                                              ]
+                                                 },
+                        "Unir + Balanced":  {
+                                                "main":  [
+                                                             [
+                                                                 {
+                                                                     "node":  "Unir + Maximum",
+                                                                     "type":  "main",
+                                                                     "index":  0
+                                                                 }
+                                                             ]
+                                                         ]
+                                            },
+                        "Resultado — Maximum Savings":  {
+                                                            "main":  [
+                                                                         [
+                                                                             {
+                                                                                 "node":  "Unir + Maximum",
+                                                                                 "type":  "main",
+                                                                                 "index":  1
+                                                                             }
+                                                                         ]
+                                                                     ]
+                                                        },
+                        "Unir + Maximum":  {
+                                               "main":  [
+                                                            [
+                                                                {
+                                                                    "node":  "Economia — Maximum Quality",
+                                                                    "type":  "main",
+                                                                    "index":  0
+                                                                }
+                                                            ]
+                                                        ]
+                                           },
+                        "Economia — Maximum Quality":  {
+                                                           "main":  [
+                                                                        [
+                                                                            {
+                                                                                "node":  "Economia — Balanced",
+                                                                                "type":  "main",
+                                                                                "index":  0
+                                                                            }
+                                                                        ]
+                                                                    ]
+                                                       },
+                        "Economia — Balanced":  {
+                                                    "main":  [
+                                                                 [
+                                                                     {
+                                                                         "node":  "Economia — Maximum Savings",
+                                                                         "type":  "main",
+                                                                         "index":  0
+                                                                     }
+                                                                 ]
+                                                             ]
+                                                },
+                        "Economia — Maximum Savings":  {
+                                                           "main":  [
+                                                                        [
+                                                                            {
+                                                                                "node":  "Resultado Real dos Perfis",
+                                                                                "type":  "main",
+                                                                                "index":  0
+                                                                            }
+                                                                        ]
+                                                                    ]
+                                                       }
+                    },
+    "settings":  {
+                     "executionOrder":  "v1",
+                     "saveDataErrorExecution":  "all",
+                     "saveDataSuccessExecution":  "all"
+                 },
+    "staticData":  null,
+    "meta":  {
+                 "templateCredsSetupCompleted":  true
+             },
+    "versionId":  "7e7a6752-87ff-4a45-8e2f-6460b2b9cde9",
+    "tags":  [
+
+             ]
 }

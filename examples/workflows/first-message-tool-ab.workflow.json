@@ -1,540 +1,555 @@
 {
-  "id": "tokenSaverFirstMessageToolAB",
-  "name": "[LAB] Token Saver — Primeira Mensagem com Tool Real",
-  "active": false,
-  "nodes": [
-    {
-      "parameters": {
-        "content": "## Prova A/B na primeira mensagem\n\nOs dois agentes usam a mesma pergunta, prompt, **Gemini 2.5 Flash**, temperatura 0 e Code Tool com **240 registros reais em JSON**.\n\n- Baseline: mede sem alterar a entrada\n- Otimizado: comprime somente a saída grande da tool\n- Resultado: tokens reais do provider + validação de 5 fatos\n\nEnvie qualquer mensagem. O teste completo acontece no primeiro turno.",
-        "height": 340,
-        "width": 3440,
-        "color": 5
-      },
-      "id": "note-overview",
-      "name": "00 — Prova A/B",
-      "type": "n8n-nodes-base.stickyNote",
-      "typeVersion": 1,
-      "position": [
-        -960,
-        -720
-      ]
-    },
-    {
-      "parameters": {
-        "content": "## 01 — Uma mensagem\n\nO Chat Trigger recebe a primeira mensagem. Não há memória, prompt artificial de 12K ou conversa anterior.",
-        "height": 700,
-        "width": 600,
-        "color": 7
-      },
-      "id": "note-input",
-      "name": "01 — Entrada",
-      "type": "n8n-nodes-base.stickyNote",
-      "typeVersion": 1,
-      "position": [
-        -960,
-        -320
-      ]
-    },
-    {
-      "parameters": {
-        "content": "## 02 — Baseline\n\n**Measure Baseline** registra o uso do Gemini, mas envia todas as mensagens e a saída JSON da tool sem modificação.",
-        "height": 700,
-        "width": 760,
-        "color": 4
-      },
-      "id": "note-baseline",
-      "name": "02 — Controle",
-      "type": "n8n-nodes-base.stickyNote",
-      "typeVersion": 1,
-      "position": [
-        -280,
-        -320
-      ]
-    },
-    {
-      "parameters": {
-        "content": "## 03 — Otimizado\n\n**Save Tokens / Balanced** transforma o JSON repetitivo da tool em tabela com schema compartilhado. Todos os 240 registros continuam presentes.",
-        "height": 700,
-        "width": 820,
-        "color": 6
-      },
-      "id": "note-optimized",
-      "name": "03 — Token Saver",
-      "type": "n8n-nodes-base.stickyNote",
-      "typeVersion": 1,
-      "position": [
-        560,
-        -320
-      ]
-    },
-    {
-      "parameters": {
-        "content": "## 04 — Resultado\n\n**Token Savings** compara o uso real das duas chamadas. O último node verifica automaticamente lead, cidade, capital, reunião e aprovação nas duas respostas.",
-        "height": 700,
-        "width": 1020,
-        "color": 5
-      },
-      "id": "note-result",
-      "name": "04 — Evidência",
-      "type": "n8n-nodes-base.stickyNote",
-      "typeVersion": 1,
-      "position": [
-        1460,
-        -320
-      ]
-    },
-    {
-      "parameters": {
-        "public": true,
-        "mode": "webhook",
-        "authentication": "none",
-        "availableInChat": true,
-        "agentName": "Token Saver — Laboratório A/B",
-        "agentDescription": "Compara o uso real de tokens na primeira mensagem com uma saída grande de ferramenta.",
-        "options": {
-          "responseMode": "lastNode",
-          "title": "Token Saver — Prova A/B",
-          "subtitle": "Envie qualquer mensagem para executar o teste completo.",
-          "inputPlaceholder": "Ex.: consulte o lead LEAD-2048",
-          "showWelcomeScreen": false,
-          "loadPreviousSession": "notSupported"
-        }
-      },
-      "id": "chat-trigger",
-      "name": "Chat — Primeira Mensagem",
-      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
-      "typeVersion": 1.4,
-      "position": [
-        -840,
-        0
-      ],
-      "webhookId": "9b70eebf-b688-45df-93b8-6c081136e04d"
-    },
-    {
-      "parameters": {
-        "assignments": {
-          "assignments": [
-            {
-              "id": "chat-input",
-              "name": "chatInput",
-              "value": "={{ $json.chatInput || 'Consulte o lead LEAD-2048.' }}",
-              "type": "string"
-            }
-          ]
-        },
-        "options": {}
-      },
-      "id": "normalize-input",
-      "name": "Normalizar Entrada",
-      "type": "n8n-nodes-base.set",
-      "typeVersion": 3.4,
-      "position": [
-        -600,
-        0
-      ]
-    },
-    {
-      "parameters": {
-        "promptType": "define",
-        "text": "={{ $('Normalizar Entrada').item.json.chatInput }}",
-        "options": {
-          "systemMessage": "Você é um agente de validação de dados.\nPara toda mensagem recebida, execute exatamente uma vez a tool consultar_base_leads.\nLocalize exclusivamente o registro LEAD-2048. Não use conhecimento externo e não invente dados.\nResponda exatamente em cinco linhas, sem introdução e sem Markdown:\nLead: [lead_identifier]\nCidade: [franchise_city_of_interest]\nCapital: [declared_available_investment_capital]\nReunião: [scheduled_expansion_meeting]\nAprovado: [eligibility_approved em minúsculas]",
-          "maxIterations": 3,
-          "returnIntermediateSteps": false,
-          "enableStreaming": false
-        }
-      },
-      "id": "baseline-agent",
-      "name": "Agente Baseline",
-      "type": "@n8n/n8n-nodes-langchain.agent",
-      "typeVersion": 3.1,
-      "position": [
-        -80,
-        -64
-      ]
-    },
-    {
-      "parameters": {
-        "modelName": "models/gemini-2.5-flash",
-        "options": {
-          "temperature": 0,
-          "maxOutputTokens": 2048
-        }
-      },
-      "id": "baseline-gemini",
-      "name": "Gemini 2.5 Flash — Baseline",
-      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
-      "typeVersion": 1.1,
-      "position": [
-        -240,
-        232
-      ]
-    },
-    {
-      "parameters": {
-        "behavior": "measureOnly"
-      },
-      "id": "baseline-wrapper",
-      "name": "Token Saver Chat Model — Baseline",
-      "type": "n8n-nodes-context-optimizer.optimizedChatModel",
-      "typeVersion": 1,
-      "position": [
-        0,
-        184
-      ]
-    },
-    {
-      "parameters": {
-        "name": "consultar_base_leads",
-        "description": "Obrigatória. Retorna a base completa de leads. Use uma vez e localize o lead_identifier solicitado.",
-        "language": "javaScript",
-        "jsCode": "const records = [];\nfor (let index = 0; index < 240; index += 1) {\n  const numericId = 1900 + index;\n  const target = numericId === 2048;\n  records.push({\n    lead_identifier: 'LEAD-' + numericId,\n    contact_full_name: target ? 'Marina Oliveira' : 'Lead Demonstração ' + numericId,\n    contact_email_address: target ? 'marina.oliveira@example.com' : 'lead' + numericId + '@example.com',\n    franchise_city_of_interest: target ? 'Campinas/SP' : ['Curitiba/PR', 'Goiânia/GO', 'Londrina/PR', 'Sorocaba/SP'][index % 4],\n    declared_available_investment_capital: target ? 'R$ 850.000,00' : 'R$ ' + (450000 + (index % 8) * 50000).toLocaleString('pt-BR') + ',00',\n    commercial_pipeline_stage: ['Novo lead', 'Qualificação', 'Reunião pendente'][index % 3],\n    acquisition_source_channel: ['Site institucional', 'Landing page', 'Indicação'][index % 3],\n    franchise_interest_temperature: ['alto', 'médio', 'em avaliação'][index % 3],\n    scheduled_expansion_meeting: target ? '05/08/2026 14:30' : null,\n    eligibility_approved: target ? false : index % 5 !== 0,\n    responsible_expansion_team: 'Expansão Casa do Construtor',\n    operational_follow_up_note: 'Confirmar somente os dados presentes neste registro; não inferir cidade, capital, data, horário ou aprovação.',\n    record_created_at: '2026-07-' + String((index % 28) + 1).padStart(2, '0') + 'T09:00:00-03:00'\n  });\n}\nreturn JSON.stringify({\n  dataset_name: 'Leads de expansão — laboratório local',\n  query_received: query,\n  total_records: records.length,\n  records\n});",
-        "specifyInputSchema": true,
-        "schemaType": "manual",
-        "inputSchema": "{\"type\":\"object\",\"properties\":{\"query\":{\"type\":\"string\",\"description\":\"Identificador exato do lead a localizar\"}},\"required\":[\"query\"]}"
-      },
-      "id": "baseline-tool",
-      "name": "Base Grande de Leads — Baseline",
-      "type": "@n8n/n8n-nodes-langchain.toolCode",
-      "typeVersion": 1.3,
-      "position": [
-        248,
-        184
-      ]
-    },
-    {
-      "parameters": {
-        "assignments": {
-          "assignments": [
-            {
-              "id": "baseline-result-output",
-              "name": "baseline_output",
-              "value": "={{ $('Agente Baseline').item.json.output }}",
-              "type": "string"
-            }
-          ]
-        },
-        "options": {}
-      },
-      "id": "baseline-result",
-      "name": "Resultado Baseline",
-      "type": "n8n-nodes-base.set",
-      "typeVersion": 3.4,
-      "position": [
-        320,
-        -64
-      ]
-    },
-    {
-      "parameters": {
-        "promptType": "define",
-        "text": "={{ $('Normalizar Entrada').item.json.chatInput }}",
-        "options": {
-          "systemMessage": "Você é um agente de validação de dados.\nPara toda mensagem recebida, execute exatamente uma vez a tool consultar_base_leads.\nLocalize exclusivamente o registro LEAD-2048. Não use conhecimento externo e não invente dados.\nResponda exatamente em cinco linhas, sem introdução e sem Markdown:\nLead: [lead_identifier]\nCidade: [franchise_city_of_interest]\nCapital: [declared_available_investment_capital]\nReunião: [scheduled_expansion_meeting]\nAprovado: [eligibility_approved em minúsculas]",
-          "maxIterations": 3,
-          "returnIntermediateSteps": false,
-          "enableStreaming": false
-        }
-      },
-      "id": "optimized-agent",
-      "name": "Agente Otimizado",
-      "type": "@n8n/n8n-nodes-langchain.agent",
-      "typeVersion": 3.1,
-      "position": [
-        760,
-        -64
-      ]
-    },
-    {
-      "parameters": {
-        "modelName": "models/gemini-2.5-flash",
-        "options": {
-          "temperature": 0,
-          "maxOutputTokens": 2048
-        }
-      },
-      "id": "optimized-gemini",
-      "name": "Gemini 2.5 Flash — Otimizado",
-      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
-      "typeVersion": 1.1,
-      "position": [
-        600,
-        232
-      ]
-    },
-    {
-      "parameters": {
-        "behavior": "optimizeAndMeasure",
-        "profile": "balanced"
-      },
-      "id": "optimized-wrapper",
-      "name": "Token Saver Chat Model — Balanced",
-      "type": "n8n-nodes-context-optimizer.optimizedChatModel",
-      "typeVersion": 1,
-      "position": [
-        840,
-        184
-      ]
-    },
-    {
-      "parameters": {
-        "name": "consultar_base_leads",
-        "description": "Obrigatória. Retorna a base completa de leads. Use uma vez e localize o lead_identifier solicitado.",
-        "language": "javaScript",
-        "jsCode": "const records = [];\nfor (let index = 0; index < 240; index += 1) {\n  const numericId = 1900 + index;\n  const target = numericId === 2048;\n  records.push({\n    lead_identifier: 'LEAD-' + numericId,\n    contact_full_name: target ? 'Marina Oliveira' : 'Lead Demonstração ' + numericId,\n    contact_email_address: target ? 'marina.oliveira@example.com' : 'lead' + numericId + '@example.com',\n    franchise_city_of_interest: target ? 'Campinas/SP' : ['Curitiba/PR', 'Goiânia/GO', 'Londrina/PR', 'Sorocaba/SP'][index % 4],\n    declared_available_investment_capital: target ? 'R$ 850.000,00' : 'R$ ' + (450000 + (index % 8) * 50000).toLocaleString('pt-BR') + ',00',\n    commercial_pipeline_stage: ['Novo lead', 'Qualificação', 'Reunião pendente'][index % 3],\n    acquisition_source_channel: ['Site institucional', 'Landing page', 'Indicação'][index % 3],\n    franchise_interest_temperature: ['alto', 'médio', 'em avaliação'][index % 3],\n    scheduled_expansion_meeting: target ? '05/08/2026 14:30' : null,\n    eligibility_approved: target ? false : index % 5 !== 0,\n    responsible_expansion_team: 'Expansão Casa do Construtor',\n    operational_follow_up_note: 'Confirmar somente os dados presentes neste registro; não inferir cidade, capital, data, horário ou aprovação.',\n    record_created_at: '2026-07-' + String((index % 28) + 1).padStart(2, '0') + 'T09:00:00-03:00'\n  });\n}\nreturn JSON.stringify({\n  dataset_name: 'Leads de expansão — laboratório local',\n  query_received: query,\n  total_records: records.length,\n  records\n});",
-        "specifyInputSchema": true,
-        "schemaType": "manual",
-        "inputSchema": "{\"type\":\"object\",\"properties\":{\"query\":{\"type\":\"string\",\"description\":\"Identificador exato do lead a localizar\"}},\"required\":[\"query\"]}"
-      },
-      "id": "optimized-tool",
-      "name": "Base Grande de Leads — Otimizado",
-      "type": "@n8n/n8n-nodes-langchain.toolCode",
-      "typeVersion": 1.3,
-      "position": [
-        1088,
-        184
-      ]
-    },
-    {
-      "parameters": {
-        "assignments": {
-          "assignments": [
-            {
-              "id": "optimized-result-output",
-              "name": "optimized_output",
-              "value": "={{ $('Agente Otimizado').item.json.output }}",
-              "type": "string"
-            }
-          ]
-        },
-        "options": {}
-      },
-      "id": "optimized-result",
-      "name": "Resultado Otimizado",
-      "type": "n8n-nodes-base.set",
-      "typeVersion": 3.4,
-      "position": [
-        1160,
-        -64
-      ]
-    },
-    {
-      "parameters": {
-        "mode": "combine",
-        "combineBy": "combineByPosition",
-        "options": {}
-      },
-      "id": "merge-results",
-      "name": "Unir Respostas A/B",
-      "type": "n8n-nodes-base.merge",
-      "typeVersion": 3.2,
-      "position": [
-        1560,
-        -64
-      ]
-    },
-    {
-      "parameters": {
-        "operation": "compareCurrentExecution",
-        "baselineModelNode": "Token Saver Chat Model — Baseline",
-        "optimizedModelNode": "Token Saver Chat Model — Balanced",
-        "outputDetail": "simple"
-      },
-      "id": "token-savings",
-      "name": "Token Savings — Comparar Uso Real",
-      "type": "n8n-nodes-context-optimizer.tokenAnalytics",
-      "typeVersion": 1,
-      "position": [
-        1800,
-        -64
-      ]
-    },
-    {
-      "parameters": {
-        "mode": "runOnceForAllItems",
-        "language": "javaScript",
-        "jsCode": "const savings = $input.first().json.tokenSavings || {};\nconst baseline = String($('Resultado Baseline').first().json.baseline_output || '');\nconst optimized = String($('Resultado Otimizado').first().json.optimized_output || '');\nconst expected = [\"LEAD-2048\",\"Campinas/SP\",\"R$ 850.000,00\",\"05/08/2026 14:30\",\"false\"];\nconst normalize = (value) => String(value || '').normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').toLowerCase();\nconst baselineNormalized = normalize(baseline);\nconst optimizedNormalized = normalize(optimized);\nconst factsPreserved = expected.every((fact) => {\n  const normalized = normalize(fact);\n  return baselineNormalized.includes(normalized) && optimizedNormalized.includes(normalized);\n});\nconst format = (value) => Number.isFinite(Number(value)) ? Number(value).toLocaleString('pt-BR') : 'indisponível';\nconst percentage = Number.isFinite(Number(savings.percent)) ? Number(savings.percent).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '%' : 'indisponível';\nconst output = [\n  '## Baseline — sem otimização',\n  baseline,\n  '',\n  '## Otimizado — Token Saver Balanced',\n  optimized,\n  '',\n  '## Prova da primeira mensagem',\n  '**Tokens de entrada reais:** ' + format(savings.before) + ' → ' + format(savings.after),\n  '**Economia real:** ' + format(savings.saved) + ' tokens (' + percentage + ')',\n  '**Medição:** ' + String(savings.measurement || 'indisponível'),\n  '**5/5 fatos preservados:** ' + (factsPreserved ? 'sim' : 'não'),\n  '**Mesma pergunta, tool, modelo e temperatura:** sim',\n].join('\\n');\nreturn [{ json: {\n  output,\n  baseline_output: baseline,\n  optimized_output: optimized,\n  token_savings: savings,\n  facts_preserved: factsPreserved,\n  first_message_test: true,\n  dataset_records: 240,\n  model: 'models/gemini-2.5-flash'\n} }];"
-      },
-      "id": "final-report",
-      "name": "Prova Final no Chat",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        2040,
-        -64
-      ]
-    }
-  ],
-  "connections": {
-    "Chat — Primeira Mensagem": {
-      "main": [
-        [
-          {
-            "node": "Normalizar Entrada",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Normalizar Entrada": {
-      "main": [
-        [
-          {
-            "node": "Agente Baseline",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "Agente Otimizado",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Gemini 2.5 Flash — Baseline": {
-      "ai_languageModel": [
-        [
-          {
-            "node": "Token Saver Chat Model — Baseline",
-            "type": "ai_languageModel",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Token Saver Chat Model — Baseline": {
-      "ai_languageModel": [
-        [
-          {
-            "node": "Agente Baseline",
-            "type": "ai_languageModel",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Base Grande de Leads — Baseline": {
-      "ai_tool": [
-        [
-          {
-            "node": "Agente Baseline",
-            "type": "ai_tool",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Agente Baseline": {
-      "main": [
-        [
-          {
-            "node": "Resultado Baseline",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Gemini 2.5 Flash — Otimizado": {
-      "ai_languageModel": [
-        [
-          {
-            "node": "Token Saver Chat Model — Balanced",
-            "type": "ai_languageModel",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Token Saver Chat Model — Balanced": {
-      "ai_languageModel": [
-        [
-          {
-            "node": "Agente Otimizado",
-            "type": "ai_languageModel",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Base Grande de Leads — Otimizado": {
-      "ai_tool": [
-        [
-          {
-            "node": "Agente Otimizado",
-            "type": "ai_tool",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Agente Otimizado": {
-      "main": [
-        [
-          {
-            "node": "Resultado Otimizado",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Resultado Baseline": {
-      "main": [
-        [
-          {
-            "node": "Unir Respostas A/B",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Resultado Otimizado": {
-      "main": [
-        [
-          {
-            "node": "Unir Respostas A/B",
-            "type": "main",
-            "index": 1
-          }
-        ]
-      ]
-    },
-    "Unir Respostas A/B": {
-      "main": [
-        [
-          {
-            "node": "Token Savings — Comparar Uso Real",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Token Savings — Comparar Uso Real": {
-      "main": [
-        [
-          {
-            "node": "Prova Final no Chat",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    }
-  },
-  "settings": {
-    "executionOrder": "v1",
-    "timezone": "America/Sao_Paulo",
-    "availableInMCP": false
-  },
-  "staticData": null,
-  "meta": {
-    "templateCredsSetupCompleted": true
-  },
-  "tags": [],
-  "versionId": "a3ecf570-3aeb-43b9-aeef-747f23a81810"
+    "id":  "tokenSaverFirstMessageToolAB",
+    "name":  "[LAB] Token Saver — Primeira Mensagem com Tool Real",
+    "active":  false,
+    "nodes":  [
+                  {
+                      "parameters":  {
+                                         "content":  "## Prova A/B na primeira mensagem\n\nOs dois agentes usam a mesma pergunta, prompt, **Gemini 2.5 Flash**, temperatura 0 e Code Tool com **240 registros reais em JSON**.\n\n- Baseline: mede sem alterar a entrada\n- Otimizado: comprime somente a saída grande da tool\n- Resultado: tokens reais do provider + validação de 5 fatos\n\nEnvie qualquer mensagem. O teste completo acontece no primeiro turno.",
+                                         "height":  340,
+                                         "width":  3440,
+                                         "color":  5
+                                     },
+                      "id":  "note-overview",
+                      "name":  "00 — Prova A/B",
+                      "type":  "n8n-nodes-base.stickyNote",
+                      "typeVersion":  1,
+                      "position":  [
+                                       -960,
+                                       -720
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "content":  "## 01 — Uma mensagem\n\nO Chat Trigger recebe a primeira mensagem. Não há memória, prompt artificial de 12K ou conversa anterior.",
+                                         "height":  700,
+                                         "width":  600,
+                                         "color":  7
+                                     },
+                      "id":  "note-input",
+                      "name":  "01 — Entrada",
+                      "type":  "n8n-nodes-base.stickyNote",
+                      "typeVersion":  1,
+                      "position":  [
+                                       -960,
+                                       -320
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "content":  "## 02 — Baseline\n\n**Measure Baseline** registra o uso do Gemini, mas envia todas as mensagens e a saída JSON da tool sem modificação.",
+                                         "height":  700,
+                                         "width":  760,
+                                         "color":  4
+                                     },
+                      "id":  "note-baseline",
+                      "name":  "02 — Controle",
+                      "type":  "n8n-nodes-base.stickyNote",
+                      "typeVersion":  1,
+                      "position":  [
+                                       -280,
+                                       -320
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "content":  "## 03 — Otimizado\n\n**Save Tokens / Balanced** transforma o JSON repetitivo da tool em tabela com schema compartilhado. Todos os 240 registros continuam presentes.",
+                                         "height":  700,
+                                         "width":  820,
+                                         "color":  6
+                                     },
+                      "id":  "note-optimized",
+                      "name":  "03 — Token Saver",
+                      "type":  "n8n-nodes-base.stickyNote",
+                      "typeVersion":  1,
+                      "position":  [
+                                       560,
+                                       -320
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "content":  "## 04 — Resultado\n\n**Token Savings** compara o uso real das duas chamadas. O último node verifica automaticamente lead, cidade, capital, reunião e aprovação nas duas respostas.",
+                                         "height":  700,
+                                         "width":  1020,
+                                         "color":  5
+                                     },
+                      "id":  "note-result",
+                      "name":  "04 — Evidência",
+                      "type":  "n8n-nodes-base.stickyNote",
+                      "typeVersion":  1,
+                      "position":  [
+                                       1460,
+                                       -320
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "public":  true,
+                                         "mode":  "webhook",
+                                         "authentication":  "none",
+                                         "availableInChat":  true,
+                                         "agentName":  "Token Saver — Laboratório A/B",
+                                         "agentDescription":  "Compara o uso real de tokens na primeira mensagem com uma saída grande de ferramenta.",
+                                         "options":  {
+                                                         "responseMode":  "lastNode",
+                                                         "title":  "Token Saver — Prova A/B",
+                                                         "subtitle":  "Envie qualquer mensagem para executar o teste completo.",
+                                                         "inputPlaceholder":  "Ex.: consulte o lead LEAD-2048",
+                                                         "showWelcomeScreen":  false,
+                                                         "loadPreviousSession":  "notSupported"
+                                                     }
+                                     },
+                      "id":  "chat-trigger",
+                      "name":  "Chat — Primeira Mensagem",
+                      "type":  "@n8n/n8n-nodes-langchain.chatTrigger",
+                      "typeVersion":  1.4,
+                      "position":  [
+                                       -840,
+                                       0
+                                   ],
+                      "webhookId":  "9b70eebf-b688-45df-93b8-6c081136e04d"
+                  },
+                  {
+                      "parameters":  {
+                                         "assignments":  {
+                                                             "assignments":  [
+                                                                                 {
+                                                                                     "id":  "chat-input",
+                                                                                     "name":  "chatInput",
+                                                                                     "value":  "={{ $json.chatInput || \u0027Consulte o lead LEAD-2048.\u0027 }}",
+                                                                                     "type":  "string"
+                                                                                 }
+                                                                             ]
+                                                         },
+                                         "options":  {
+
+                                                     }
+                                     },
+                      "id":  "normalize-input",
+                      "name":  "Normalizar Entrada",
+                      "type":  "n8n-nodes-base.set",
+                      "typeVersion":  3.4,
+                      "position":  [
+                                       -600,
+                                       0
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "promptType":  "define",
+                                         "text":  "={{ $(\u0027Normalizar Entrada\u0027).item.json.chatInput }}",
+                                         "options":  {
+                                                         "systemMessage":  "Você é um agente de validação de dados.\nPara toda mensagem recebida, execute exatamente uma vez a tool consultar_base_leads.\nLocalize exclusivamente o registro LEAD-2048. Não use conhecimento externo e não invente dados.\nResponda exatamente em cinco linhas, sem introdução e sem Markdown:\nLead: [lead_identifier]\nCidade: [franchise_city_of_interest]\nCapital: [declared_available_investment_capital]\nReunião: [scheduled_expansion_meeting]\nAprovado: [eligibility_approved em minúsculas]",
+                                                         "maxIterations":  3,
+                                                         "returnIntermediateSteps":  false,
+                                                         "enableStreaming":  false
+                                                     }
+                                     },
+                      "id":  "baseline-agent",
+                      "name":  "Agente Baseline",
+                      "type":  "@n8n/n8n-nodes-langchain.agent",
+                      "typeVersion":  3.1,
+                      "position":  [
+                                       -80,
+                                       -64
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "modelName":  "models/gemini-2.5-flash",
+                                         "options":  {
+                                                         "temperature":  0,
+                                                         "maxOutputTokens":  2048
+                                                     }
+                                     },
+                      "id":  "baseline-gemini",
+                      "name":  "Gemini 2.5 Flash — Baseline",
+                      "type":  "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+                      "typeVersion":  1.1,
+                      "position":  [
+                                       -240,
+                                       232
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "behavior":  "measureOnly",
+                                         "resource":  "agentModel",
+                                         "operation":  "optimizeAgentModel"
+                                     },
+                      "id":  "baseline-wrapper",
+                      "name":  "Token Saver Chat Model — Baseline",
+                      "type":  "n8n-nodes-context-optimizer.contextSaver",
+                      "typeVersion":  3,
+                      "position":  [
+                                       0,
+                                       184
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "name":  "consultar_base_leads",
+                                         "description":  "Obrigatória. Retorna a base completa de leads. Use uma vez e localize o lead_identifier solicitado.",
+                                         "language":  "javaScript",
+                                         "jsCode":  "const records = [];\nfor (let index = 0; index \u003c 240; index += 1) {\n  const numericId = 1900 + index;\n  const target = numericId === 2048;\n  records.push({\n    lead_identifier: \u0027LEAD-\u0027 + numericId,\n    contact_full_name: target ? \u0027Marina Oliveira\u0027 : \u0027Lead Demonstração \u0027 + numericId,\n    contact_email_address: target ? \u0027marina.oliveira@example.com\u0027 : \u0027lead\u0027 + numericId + \u0027@example.com\u0027,\n    franchise_city_of_interest: target ? \u0027Campinas/SP\u0027 : [\u0027Curitiba/PR\u0027, \u0027Goiânia/GO\u0027, \u0027Londrina/PR\u0027, \u0027Sorocaba/SP\u0027][index % 4],\n    declared_available_investment_capital: target ? \u0027R$ 850.000,00\u0027 : \u0027R$ \u0027 + (450000 + (index % 8) * 50000).toLocaleString(\u0027pt-BR\u0027) + \u0027,00\u0027,\n    commercial_pipeline_stage: [\u0027Novo lead\u0027, \u0027Qualificação\u0027, \u0027Reunião pendente\u0027][index % 3],\n    acquisition_source_channel: [\u0027Site institucional\u0027, \u0027Landing page\u0027, \u0027Indicação\u0027][index % 3],\n    franchise_interest_temperature: [\u0027alto\u0027, \u0027médio\u0027, \u0027em avaliação\u0027][index % 3],\n    scheduled_expansion_meeting: target ? \u002705/08/2026 14:30\u0027 : null,\n    eligibility_approved: target ? false : index % 5 !== 0,\n    responsible_expansion_team: \u0027Expansão Casa do Construtor\u0027,\n    operational_follow_up_note: \u0027Confirmar somente os dados presentes neste registro; não inferir cidade, capital, data, horário ou aprovação.\u0027,\n    record_created_at: \u00272026-07-\u0027 + String((index % 28) + 1).padStart(2, \u00270\u0027) + \u0027T09:00:00-03:00\u0027\n  });\n}\nreturn JSON.stringify({\n  dataset_name: \u0027Leads de expansão — laboratório local\u0027,\n  query_received: query,\n  total_records: records.length,\n  records\n});",
+                                         "specifyInputSchema":  true,
+                                         "schemaType":  "manual",
+                                         "inputSchema":  "{\"type\":\"object\",\"properties\":{\"query\":{\"type\":\"string\",\"description\":\"Identificador exato do lead a localizar\"}},\"required\":[\"query\"]}"
+                                     },
+                      "id":  "baseline-tool",
+                      "name":  "Base Grande de Leads — Baseline",
+                      "type":  "@n8n/n8n-nodes-langchain.toolCode",
+                      "typeVersion":  1.3,
+                      "position":  [
+                                       248,
+                                       184
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "assignments":  {
+                                                             "assignments":  [
+                                                                                 {
+                                                                                     "id":  "baseline-result-output",
+                                                                                     "name":  "baseline_output",
+                                                                                     "value":  "={{ $(\u0027Agente Baseline\u0027).item.json.output }}",
+                                                                                     "type":  "string"
+                                                                                 }
+                                                                             ]
+                                                         },
+                                         "options":  {
+
+                                                     }
+                                     },
+                      "id":  "baseline-result",
+                      "name":  "Resultado Baseline",
+                      "type":  "n8n-nodes-base.set",
+                      "typeVersion":  3.4,
+                      "position":  [
+                                       320,
+                                       -64
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "promptType":  "define",
+                                         "text":  "={{ $(\u0027Normalizar Entrada\u0027).item.json.chatInput }}",
+                                         "options":  {
+                                                         "systemMessage":  "Você é um agente de validação de dados.\nPara toda mensagem recebida, execute exatamente uma vez a tool consultar_base_leads.\nLocalize exclusivamente o registro LEAD-2048. Não use conhecimento externo e não invente dados.\nResponda exatamente em cinco linhas, sem introdução e sem Markdown:\nLead: [lead_identifier]\nCidade: [franchise_city_of_interest]\nCapital: [declared_available_investment_capital]\nReunião: [scheduled_expansion_meeting]\nAprovado: [eligibility_approved em minúsculas]",
+                                                         "maxIterations":  3,
+                                                         "returnIntermediateSteps":  false,
+                                                         "enableStreaming":  false
+                                                     }
+                                     },
+                      "id":  "optimized-agent",
+                      "name":  "Agente Otimizado",
+                      "type":  "@n8n/n8n-nodes-langchain.agent",
+                      "typeVersion":  3.1,
+                      "position":  [
+                                       760,
+                                       -64
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "modelName":  "models/gemini-2.5-flash",
+                                         "options":  {
+                                                         "temperature":  0,
+                                                         "maxOutputTokens":  2048
+                                                     }
+                                     },
+                      "id":  "optimized-gemini",
+                      "name":  "Gemini 2.5 Flash — Otimizado",
+                      "type":  "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+                      "typeVersion":  1.1,
+                      "position":  [
+                                       600,
+                                       232
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "behavior":  "optimizeAndMeasure",
+                                         "profile":  "balanced",
+                                         "resource":  "agentModel",
+                                         "operation":  "optimizeAgentModel"
+                                     },
+                      "id":  "optimized-wrapper",
+                      "name":  "Token Saver Chat Model — Balanced",
+                      "type":  "n8n-nodes-context-optimizer.contextSaver",
+                      "typeVersion":  3,
+                      "position":  [
+                                       840,
+                                       184
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "name":  "consultar_base_leads",
+                                         "description":  "Obrigatória. Retorna a base completa de leads. Use uma vez e localize o lead_identifier solicitado.",
+                                         "language":  "javaScript",
+                                         "jsCode":  "const records = [];\nfor (let index = 0; index \u003c 240; index += 1) {\n  const numericId = 1900 + index;\n  const target = numericId === 2048;\n  records.push({\n    lead_identifier: \u0027LEAD-\u0027 + numericId,\n    contact_full_name: target ? \u0027Marina Oliveira\u0027 : \u0027Lead Demonstração \u0027 + numericId,\n    contact_email_address: target ? \u0027marina.oliveira@example.com\u0027 : \u0027lead\u0027 + numericId + \u0027@example.com\u0027,\n    franchise_city_of_interest: target ? \u0027Campinas/SP\u0027 : [\u0027Curitiba/PR\u0027, \u0027Goiânia/GO\u0027, \u0027Londrina/PR\u0027, \u0027Sorocaba/SP\u0027][index % 4],\n    declared_available_investment_capital: target ? \u0027R$ 850.000,00\u0027 : \u0027R$ \u0027 + (450000 + (index % 8) * 50000).toLocaleString(\u0027pt-BR\u0027) + \u0027,00\u0027,\n    commercial_pipeline_stage: [\u0027Novo lead\u0027, \u0027Qualificação\u0027, \u0027Reunião pendente\u0027][index % 3],\n    acquisition_source_channel: [\u0027Site institucional\u0027, \u0027Landing page\u0027, \u0027Indicação\u0027][index % 3],\n    franchise_interest_temperature: [\u0027alto\u0027, \u0027médio\u0027, \u0027em avaliação\u0027][index % 3],\n    scheduled_expansion_meeting: target ? \u002705/08/2026 14:30\u0027 : null,\n    eligibility_approved: target ? false : index % 5 !== 0,\n    responsible_expansion_team: \u0027Expansão Casa do Construtor\u0027,\n    operational_follow_up_note: \u0027Confirmar somente os dados presentes neste registro; não inferir cidade, capital, data, horário ou aprovação.\u0027,\n    record_created_at: \u00272026-07-\u0027 + String((index % 28) + 1).padStart(2, \u00270\u0027) + \u0027T09:00:00-03:00\u0027\n  });\n}\nreturn JSON.stringify({\n  dataset_name: \u0027Leads de expansão — laboratório local\u0027,\n  query_received: query,\n  total_records: records.length,\n  records\n});",
+                                         "specifyInputSchema":  true,
+                                         "schemaType":  "manual",
+                                         "inputSchema":  "{\"type\":\"object\",\"properties\":{\"query\":{\"type\":\"string\",\"description\":\"Identificador exato do lead a localizar\"}},\"required\":[\"query\"]}"
+                                     },
+                      "id":  "optimized-tool",
+                      "name":  "Base Grande de Leads — Otimizado",
+                      "type":  "@n8n/n8n-nodes-langchain.toolCode",
+                      "typeVersion":  1.3,
+                      "position":  [
+                                       1088,
+                                       184
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "assignments":  {
+                                                             "assignments":  [
+                                                                                 {
+                                                                                     "id":  "optimized-result-output",
+                                                                                     "name":  "optimized_output",
+                                                                                     "value":  "={{ $(\u0027Agente Otimizado\u0027).item.json.output }}",
+                                                                                     "type":  "string"
+                                                                                 }
+                                                                             ]
+                                                         },
+                                         "options":  {
+
+                                                     }
+                                     },
+                      "id":  "optimized-result",
+                      "name":  "Resultado Otimizado",
+                      "type":  "n8n-nodes-base.set",
+                      "typeVersion":  3.4,
+                      "position":  [
+                                       1160,
+                                       -64
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "mode":  "combine",
+                                         "combineBy":  "combineByPosition",
+                                         "options":  {
+
+                                                     }
+                                     },
+                      "id":  "merge-results",
+                      "name":  "Unir Respostas A/B",
+                      "type":  "n8n-nodes-base.merge",
+                      "typeVersion":  3.2,
+                      "position":  [
+                                       1560,
+                                       -64
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "operation":  "compareCurrentExecution",
+                                         "baselineModelNode":  "Token Saver Chat Model — Baseline",
+                                         "optimizedModelNode":  "Token Saver Chat Model — Balanced",
+                                         "outputDetail":  "simple",
+                                         "resource":  "savingsReport"
+                                     },
+                      "id":  "token-savings",
+                      "name":  "Token Savings — Comparar Uso Real",
+                      "type":  "n8n-nodes-context-optimizer.contextSaver",
+                      "typeVersion":  3,
+                      "position":  [
+                                       1800,
+                                       -64
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "mode":  "runOnceForAllItems",
+                                         "language":  "javaScript",
+                                         "jsCode":  "const savings = $input.first().json.tokenSavings || {};\nconst baseline = String($(\u0027Resultado Baseline\u0027).first().json.baseline_output || \u0027\u0027);\nconst optimized = String($(\u0027Resultado Otimizado\u0027).first().json.optimized_output || \u0027\u0027);\nconst expected = [\"LEAD-2048\",\"Campinas/SP\",\"R$ 850.000,00\",\"05/08/2026 14:30\",\"false\"];\nconst normalize = (value) =\u003e String(value || \u0027\u0027).normalize(\u0027NFD\u0027).replace(/[\\u0300-\\u036f]/g, \u0027\u0027).toLowerCase();\nconst baselineNormalized = normalize(baseline);\nconst optimizedNormalized = normalize(optimized);\nconst factsPreserved = expected.every((fact) =\u003e {\n  const normalized = normalize(fact);\n  return baselineNormalized.includes(normalized) \u0026\u0026 optimizedNormalized.includes(normalized);\n});\nconst format = (value) =\u003e Number.isFinite(Number(value)) ? Number(value).toLocaleString(\u0027pt-BR\u0027) : \u0027indisponível\u0027;\nconst percentage = Number.isFinite(Number(savings.percent)) ? Number(savings.percent).toLocaleString(\u0027pt-BR\u0027, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + \u0027%\u0027 : \u0027indisponível\u0027;\nconst output = [\n  \u0027## Baseline — sem otimização\u0027,\n  baseline,\n  \u0027\u0027,\n  \u0027## Otimizado — Token Saver Balanced\u0027,\n  optimized,\n  \u0027\u0027,\n  \u0027## Prova da primeira mensagem\u0027,\n  \u0027**Tokens de entrada reais:** \u0027 + format(savings.before) + \u0027 → \u0027 + format(savings.after),\n  \u0027**Economia real:** \u0027 + format(savings.saved) + \u0027 tokens (\u0027 + percentage + \u0027)\u0027,\n  \u0027**Medição:** \u0027 + String(savings.measurement || \u0027indisponível\u0027),\n  \u0027**5/5 fatos preservados:** \u0027 + (factsPreserved ? \u0027sim\u0027 : \u0027não\u0027),\n  \u0027**Mesma pergunta, tool, modelo e temperatura:** sim\u0027,\n].join(\u0027\\n\u0027);\nreturn [{ json: {\n  output,\n  baseline_output: baseline,\n  optimized_output: optimized,\n  token_savings: savings,\n  facts_preserved: factsPreserved,\n  first_message_test: true,\n  dataset_records: 240,\n  model: \u0027models/gemini-2.5-flash\u0027\n} }];"
+                                     },
+                      "id":  "final-report",
+                      "name":  "Prova Final no Chat",
+                      "type":  "n8n-nodes-base.code",
+                      "typeVersion":  2,
+                      "position":  [
+                                       2040,
+                                       -64
+                                   ]
+                  }
+              ],
+    "connections":  {
+                        "Chat — Primeira Mensagem":  {
+                                                         "main":  [
+                                                                      [
+                                                                          {
+                                                                              "node":  "Normalizar Entrada",
+                                                                              "type":  "main",
+                                                                              "index":  0
+                                                                          }
+                                                                      ]
+                                                                  ]
+                                                     },
+                        "Normalizar Entrada":  {
+                                                   "main":  [
+                                                                [
+                                                                    {
+                                                                        "node":  "Agente Baseline",
+                                                                        "type":  "main",
+                                                                        "index":  0
+                                                                    },
+                                                                    {
+                                                                        "node":  "Agente Otimizado",
+                                                                        "type":  "main",
+                                                                        "index":  0
+                                                                    }
+                                                                ]
+                                                            ]
+                                               },
+                        "Gemini 2.5 Flash — Baseline":  {
+                                                            "ai_languageModel":  [
+                                                                                     [
+                                                                                         {
+                                                                                             "node":  "Token Saver Chat Model — Baseline",
+                                                                                             "type":  "ai_languageModel",
+                                                                                             "index":  0
+                                                                                         }
+                                                                                     ]
+                                                                                 ]
+                                                        },
+                        "Token Saver Chat Model — Baseline":  {
+                                                                  "ai_languageModel":  [
+                                                                                           [
+                                                                                               {
+                                                                                                   "node":  "Agente Baseline",
+                                                                                                   "type":  "ai_languageModel",
+                                                                                                   "index":  0
+                                                                                               }
+                                                                                           ]
+                                                                                       ]
+                                                              },
+                        "Base Grande de Leads — Baseline":  {
+                                                                "ai_tool":  [
+                                                                                [
+                                                                                    {
+                                                                                        "node":  "Agente Baseline",
+                                                                                        "type":  "ai_tool",
+                                                                                        "index":  0
+                                                                                    }
+                                                                                ]
+                                                                            ]
+                                                            },
+                        "Agente Baseline":  {
+                                                "main":  [
+                                                             [
+                                                                 {
+                                                                     "node":  "Resultado Baseline",
+                                                                     "type":  "main",
+                                                                     "index":  0
+                                                                 }
+                                                             ]
+                                                         ]
+                                            },
+                        "Gemini 2.5 Flash — Otimizado":  {
+                                                             "ai_languageModel":  [
+                                                                                      [
+                                                                                          {
+                                                                                              "node":  "Token Saver Chat Model — Balanced",
+                                                                                              "type":  "ai_languageModel",
+                                                                                              "index":  0
+                                                                                          }
+                                                                                      ]
+                                                                                  ]
+                                                         },
+                        "Token Saver Chat Model — Balanced":  {
+                                                                  "ai_languageModel":  [
+                                                                                           [
+                                                                                               {
+                                                                                                   "node":  "Agente Otimizado",
+                                                                                                   "type":  "ai_languageModel",
+                                                                                                   "index":  0
+                                                                                               }
+                                                                                           ]
+                                                                                       ]
+                                                              },
+                        "Base Grande de Leads — Otimizado":  {
+                                                                 "ai_tool":  [
+                                                                                 [
+                                                                                     {
+                                                                                         "node":  "Agente Otimizado",
+                                                                                         "type":  "ai_tool",
+                                                                                         "index":  0
+                                                                                     }
+                                                                                 ]
+                                                                             ]
+                                                             },
+                        "Agente Otimizado":  {
+                                                 "main":  [
+                                                              [
+                                                                  {
+                                                                      "node":  "Resultado Otimizado",
+                                                                      "type":  "main",
+                                                                      "index":  0
+                                                                  }
+                                                              ]
+                                                          ]
+                                             },
+                        "Resultado Baseline":  {
+                                                   "main":  [
+                                                                [
+                                                                    {
+                                                                        "node":  "Unir Respostas A/B",
+                                                                        "type":  "main",
+                                                                        "index":  0
+                                                                    }
+                                                                ]
+                                                            ]
+                                               },
+                        "Resultado Otimizado":  {
+                                                    "main":  [
+                                                                 [
+                                                                     {
+                                                                         "node":  "Unir Respostas A/B",
+                                                                         "type":  "main",
+                                                                         "index":  1
+                                                                     }
+                                                                 ]
+                                                             ]
+                                                },
+                        "Unir Respostas A/B":  {
+                                                   "main":  [
+                                                                [
+                                                                    {
+                                                                        "node":  "Token Savings — Comparar Uso Real",
+                                                                        "type":  "main",
+                                                                        "index":  0
+                                                                    }
+                                                                ]
+                                                            ]
+                                               },
+                        "Token Savings — Comparar Uso Real":  {
+                                                                  "main":  [
+                                                                               [
+                                                                                   {
+                                                                                       "node":  "Prova Final no Chat",
+                                                                                       "type":  "main",
+                                                                                       "index":  0
+                                                                                   }
+                                                                               ]
+                                                                           ]
+                                                              }
+                    },
+    "settings":  {
+                     "executionOrder":  "v1",
+                     "timezone":  "America/Sao_Paulo",
+                     "availableInMCP":  false
+                 },
+    "staticData":  null,
+    "meta":  {
+                 "templateCredsSetupCompleted":  true
+             },
+    "tags":  [
+
+             ],
+    "versionId":  "a3ecf570-3aeb-43b9-aeef-747f23a81810"
 }

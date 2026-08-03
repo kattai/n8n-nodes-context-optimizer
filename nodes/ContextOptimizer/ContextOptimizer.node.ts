@@ -700,7 +700,8 @@ export class ContextOptimizer implements INodeType {
 					{
 						name: 'Maximum Savings',
 						value: 'aggressive',
-						description: 'Preserve the latest 3 messages and merge polarity-safe near-duplicates',
+						description:
+							'Preserve every unique message; virtualize recoverable large content and remove only exact repetition',
 						action: 'Maximize context savings',
 					},
 					{
