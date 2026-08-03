@@ -84,6 +84,16 @@ jobs:
       - name: Install dependencies
         run: 'npm ci'
 
+      - name: Select npm dist-tag
+        id: npm-tag
+        shell: bash
+        run: |
+          if [[ "$(node -p "require('./package.json').version")" == *-* ]]; then
+            echo "tag=next" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=latest" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Release
         # Publishes to npm with a provenance attestation (requires id-token: write above).
         # Lint and build run automatically as part of the release process.
@@ -97,3 +107,4 @@ jobs:
           npm run release
         env:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_CONFIG_TAG: ${{ steps.npm-tag.outputs.tag }}

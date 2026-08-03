@@ -10,10 +10,10 @@ describe('configured resource store', () => {
 
 	it('requires credentials only for encryption or Redis', () => {
 		expect(() => createConfiguredResourceStore({ encrypt: true })).toThrow(
-			'Select Context Saver Storage credentials',
+			'Select Context Saver Storage API credentials with an encryption key',
 		);
 		expect(() => createConfiguredResourceStore({ provider: 'redis' })).toThrow(
-			'Select Context Saver Storage credentials',
+			'Select Context Saver Storage API credentials with a Redis URL',
 		);
 		expect(
 			createConfiguredResourceStore({

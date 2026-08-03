@@ -9,6 +9,7 @@ import { ContextStore } from '../../nodes/ContextStore/ContextStore.node';
 import { OptimizedChatModel } from '../../nodes/OptimizedChatModel/OptimizedChatModel.node';
 import { TokenAnalytics } from '../../nodes/TokenAnalytics/TokenAnalytics.node';
 import { AgentHandoff } from '../../nodes/AgentHandoff/AgentHandoff.node';
+import { ContextSaver } from '../../nodes/ContextSaver/ContextSaver.node';
 import { resolveNodeCacheStrategy } from '../../src/cache/node-options';
 
 function property(node: { description: { properties: Array<{ name: string }> } }, name: string) {
@@ -20,14 +21,45 @@ function properties(node: { description: { properties: Array<{ name: string }> }
 }
 
 describe('Token Saver node descriptions', () => {
-	it('uses task-specific names across all seven nodes', () => {
-		expect(new OptimizedChatModel().description.displayName).toBe('Agent Optimizer');
-		expect(new ContextOptimizer().description.displayName).toBe('Data Optimizer');
-		expect(new ContextStore().description.displayName).toBe('Context Storage');
-		expect(new ContextRetrieverTool().description.displayName).toBe('Exact Lookup');
-		expect(new TokenAnalytics().description.displayName).toBe('Savings Report');
-		expect(new ContextMemory().description.displayName).toBe('Session Memory');
-		expect(new AgentHandoff().description.displayName).toBe('Agent Handoff');
+	it('keeps the seven focused implementations available internally', () => {
+		const nodes = [
+			new OptimizedChatModel(),
+			new ContextOptimizer(),
+			new ContextStore(),
+			new ContextRetrieverTool(),
+			new TokenAnalytics(),
+			new ContextMemory(),
+			new AgentHandoff(),
+		];
+		expect(nodes.map((node) => node.description.displayName)).toEqual([
+			'Agent Optimizer',
+			'Data Optimizer',
+			'Context Storage',
+			'Exact Lookup',
+			'Savings Report',
+			'Session Memory',
+			'Agent Handoff',
+		]);
+	});
+
+	it('publishes one Context Saver node with seven selectable features', () => {
+		const node = new ContextSaver();
+		const resource = property(node, 'resource') as {
+			options: Array<{ name: string; value: string }>;
+		};
+
+		expect(node.description.displayName).toBe('Context Saver');
+		expect(resource.options).toEqual([
+			expect.objectContaining({ name: 'Agent Model', value: 'agentModel' }),
+			expect.objectContaining({ name: 'Data Optimizer', value: 'dataOptimization' }),
+			expect.objectContaining({ name: 'Session Memory', value: 'sessionMemory' }),
+			expect.objectContaining({ name: 'Agent Handoff', value: 'agentHandoff' }),
+			expect.objectContaining({ name: 'Context Storage', value: 'contextStorage' }),
+			expect.objectContaining({ name: 'Exact Lookup', value: 'exactLookup' }),
+			expect.objectContaining({ name: 'Savings Report', value: 'savingsReport' }),
+		]);
+		expect(node.description.inputs).toContain('ai_languageModel');
+		expect(node.description.outputs).toContain('ai_tool');
 	});
 
 	it('keeps legacy versions loadable while defaulting renamed nodes to current versions', () => {

@@ -16,7 +16,7 @@
 		"url": "git+https://github.com/kattai/n8n-nodes-context-optimizer.git"
 	},
 	"scripts": {
-		"build": "n8n-node build",
+		"build": "n8n-node build && tsc --build --force",
 		"build:watch": "tsc --watch",
 		"dev": "n8n-node dev",
 		"lint": "n8n-node lint",
@@ -48,13 +48,7 @@
 			"dist/credentials/ContextSaverStorageApi.credentials.js"
 		],
 		"nodes": [
-			"dist/nodes/AgentHandoff/AgentHandoff.node.js",
-			"dist/nodes/ContextOptimizer/ContextOptimizer.node.js",
-			"dist/nodes/ContextMemory/ContextMemory.node.js",
-			"dist/nodes/ContextRetrieverTool/ContextRetrieverTool.node.js",
-			"dist/nodes/ContextStore/ContextStore.node.js",
-			"dist/nodes/OptimizedChatModel/OptimizedChatModel.node.js",
-			"dist/nodes/TokenAnalytics/TokenAnalytics.node.js"
+			"dist/nodes/ContextSaver/ContextSaver.node.js"
 		]
 	},
 	"devDependencies": {
