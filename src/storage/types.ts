@@ -1,7 +1,7 @@
 import type { DetectedContentType } from '../content/types';
 
 export interface ResourceManifest {
-	storageVersion: 1 | 2;
+	storageVersion: 1 | 2 | 3;
 	resourceId: string;
 	contentType: DetectedContentType;
 	originalHash: string;
@@ -21,6 +21,8 @@ export interface ResourceManifest {
 	};
 	fields?: string[];
 	recordCount?: number;
+	encryption?: 'aes-256-gcm';
+	provider?: 'filesystem' | 'redis';
 }
 
 export interface StoreResourceInput {

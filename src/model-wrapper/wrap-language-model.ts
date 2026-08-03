@@ -26,6 +26,12 @@ import {
 	type MessageLike,
 	type ToolSequenceIssue,
 } from './message-sequence';
+import {
+	resolveAdaptiveProfile,
+	type AdaptiveProfileResult,
+	type AdaptiveRiskSignal,
+} from '../policy/adaptive-profile';
+import { compileSystemPrompt } from '../prompt/system-prompt-compiler';
 
 export type ModelBypassReason = 'tool_sequence_content_only' | ToolSequenceIssue;
 
@@ -66,7 +72,7 @@ export interface ModelOptimizationMetrics {
 	stablePrefixTokens: number;
 	dynamicTokensBefore: number;
 	dynamicTokensAfter: number;
-	cacheRegistryScope: 'disabled' | 'process_local' | 'worker_local';
+	cacheRegistryScope: 'disabled' | 'process_local' | 'worker_local' | 'shared_redis';
 	cacheWarning?: 'queue_mode_local_registry';
 	bypassReason?: ModelBypassReason;
 	toolSchemasBefore?: number;
@@ -75,6 +81,14 @@ export interface ModelOptimizationMetrics {
 	toolSchemaTokensAfter?: number;
 	toolSchemaSelectionReason?: ToolSchemaSelectionResult['reason'];
 	toolSchemaSelectionConfidence?: number;
+	selectedProfile?: string;
+	effectiveProfile?: string;
+	adaptiveRiskLevel?: AdaptiveProfileResult['riskLevel'];
+	adaptiveRiskSignals?: AdaptiveRiskSignal[];
+	adaptiveDowngrade?: boolean;
+	promptTokensBefore?: number;
+	promptTokensAfter?: number;
+	promptSavedTokens?: number;
 }
 
 export interface ModelInvocationObserver {
@@ -93,6 +107,8 @@ export interface LanguageModelWrapperOptions extends OptimizeContextOptions {
 		'bindOptions' | 'profile' | 'recentlyUsedTools' | 'registry'
 	>;
 	toolSelectionEvidence?: ToolSchemaSelectionResult;
+	adaptiveOptimization?: boolean;
+	compileSystemPrompt?: boolean;
 }
 
 export interface CacheAwareModelOptions {
@@ -101,7 +117,7 @@ export interface CacheAwareModelOptions {
 	scope: string;
 	minimumRepetitions: number;
 	minimumStablePrefixTokens: number;
-	registryScope?: 'process_local' | 'worker_local';
+	registryScope?: 'process_local' | 'worker_local' | 'shared_redis';
 }
 
 interface OptimizedModelInput {
@@ -133,6 +149,13 @@ interface OptimizedMessages {
 	toolMetrics?: ToolOptimizationMetrics;
 	cacheFingerprints?: string[];
 	cacheMetrics?: CacheOptimizationMetrics;
+	adaptiveMetrics?: AdaptiveOptimizationMetrics;
+}
+
+interface AdaptiveOptimizationMetrics {
+	profile: AdaptiveProfileResult;
+	promptTokensBefore: number;
+	promptTokensAfter: number;
 }
 
 interface CacheOptimizationMetrics {
@@ -256,6 +279,111 @@ function isUserCorrection(entry: MessageEntry): boolean {
 	return /(?:^|\b)(?:corre[cç][aã]o|corrigindo|na verdade|quis dizer|actually|correction|i meant)(?:\b|:)/i.test(
 		entry.text,
 	);
+}
+
+function coerceMessages(input: unknown): unknown[] {
+	if (Array.isArray(input)) return input;
+	if (
+		input &&
+		typeof input === 'object' &&
+		'toChatMessages' in input &&
+		typeof (input as { toChatMessages: unknown }).toChatMessages === 'function'
+	) {
+		try {
+			return (input as { toChatMessages: () => unknown[] }).toChatMessages();
+		} catch {
+			return [input];
+		}
+	}
+	return input === undefined || input === null ? [] : [input];
+}
+
+function adaptiveRiskSignals(
+	messages: unknown[],
+	options: LanguageModelWrapperOptions,
+): AdaptiveRiskSignal[] {
+	const signals = new Set<AdaptiveRiskSignal>();
+	const toolSequence = analyzeToolSequence(messages);
+	if (toolSequence.activeMessageIndexes.length > 0) signals.add('active_tool_sequence');
+	if (messages.some((message) => !message || typeof message !== 'object')) {
+		signals.add('unknown_message_shape');
+	}
+	const latestUser = [...messages]
+		.reverse()
+		.find((message) => messageRole(message as MessageLike) === 'user') as MessageLike | undefined;
+	const task = latestUser ? messageText(latestUser) : '';
+	if (/```|\b(?:SELECT|INSERT|UPDATE|DELETE|CREATE|ALTER|DROP)\b|\{\s*"[^"\n]+"\s*:/i.test(task)) {
+		signals.add('code_or_query');
+	}
+	if (
+		/\b(?:exact|exactly|verbatim|literal|quote exactly|exato|exatamente|literalmente|ipsis litteris|cite exatamente)\b/i.test(
+			task,
+		)
+	) {
+		signals.add('exact_quote_requested');
+	}
+	const evidence = options.toolSelectionEvidence;
+	if (evidence?.reason === 'structured_output_ambiguous') signals.add('structured_output');
+	if (evidence?.reason === 'low_confidence') signals.add('low_tool_confidence');
+	if (
+		isSavingsProfile(options.profile) &&
+		(!options.maximumSavings || !options.maximumSavings.retrieverAvailable)
+	) {
+		signals.add('retrieval_unavailable');
+	}
+	return [...signals];
+}
+
+function compileSystemMessages(
+	messages: unknown[],
+	enabled: boolean,
+): { messages: unknown[]; tokensBefore: number; tokensAfter: number } {
+	if (!enabled) return { messages, tokensBefore: 0, tokensAfter: 0 };
+	let changed = false;
+	let tokensBefore = 0;
+	let tokensAfter = 0;
+	const compiled = messages.map((raw) => {
+		const message = raw as MessageLike;
+		if (messageRole(message) !== 'system') return raw;
+		const text = messageText(message);
+		const result = compileSystemPrompt(text);
+		tokensBefore += result.tokensBefore;
+		tokensAfter += result.tokensAfter;
+		if (!result.changed) return raw;
+		changed = true;
+		return cloneWithContent(message, result.content);
+	});
+	return { messages: changed ? compiled : messages, tokensBefore, tokensAfter };
+}
+
+function combineAdaptiveMetrics(
+	metrics: Array<AdaptiveOptimizationMetrics | undefined>,
+): AdaptiveOptimizationMetrics | undefined {
+	const available = metrics.filter(
+		(entry): entry is AdaptiveOptimizationMetrics => entry !== undefined,
+	);
+	if (available.length === 0) return undefined;
+	const profileRank = { quality: 0, balanced: 1, savings: 2, custom: 3 } as const;
+	const riskRank = { low: 0, medium: 1, high: 2 } as const;
+	const first = available[0].profile;
+	const effectiveProfile = available
+		.map((entry) => entry.profile.effectiveProfile)
+		.sort((left, right) => profileRank[left] - profileRank[right])[0];
+	const riskLevel = available
+		.map((entry) => entry.profile.riskLevel)
+		.sort((left, right) => riskRank[right] - riskRank[left])[0];
+	const signals = [...new Set(available.flatMap((entry) => entry.profile.signals))];
+	return {
+		profile: {
+			selectedProfile: first.selectedProfile,
+			effectiveProfile,
+			riskLevel,
+			signals,
+			downgraded: effectiveProfile !== first.selectedProfile,
+		},
+		promptTokensBefore: available.reduce((total, entry) => total + entry.promptTokensBefore, 0),
+		promptTokensAfter: available.reduce((total, entry) => total + entry.promptTokensAfter, 0),
+	};
 }
 
 function cacheBlockKind(
@@ -477,6 +605,9 @@ async function optimizeToolResults(
 		} else if (result.tokens.optimized >= result.tokens.original) {
 			optimized.push(raw);
 			continue;
+		} else {
+			metrics.eligibleTokensBefore += result.tokens.original;
+			metrics.eligibleTokensAfter += result.tokens.optimized;
 		}
 		if (content === toolText) {
 			optimized.push(raw);
@@ -486,8 +617,13 @@ async function optimizeToolResults(
 		optimized.push(cloneWithContent(message, content));
 	}
 	if (metrics.eligibleTokensBefore > 0) {
-		metrics.targetBandReached = metrics.eligibleTokensAfter <= metrics.eligibleTokensBefore * 0.3;
-		if (metrics.targetBandReached) delete metrics.targetNotReachedReason;
+		const profile = resolveProfile(options.profile ?? 'balanced', options.custom);
+		metrics.targetBandReached =
+			metrics.eligibleTokensAfter <=
+			metrics.eligibleTokensBefore * (1 - profile.eligibleSavingsMinPercent / 100);
+		if (metrics.targetBandReached && !metrics.storageFallbackUsed) {
+			delete metrics.targetNotReachedReason;
+		}
 	}
 	return { messages: changed ? optimized : messages, changed, metrics };
 }
@@ -503,12 +639,30 @@ async function optimizeMessages(
 			bypassReason: toolSequence.issue,
 		};
 	}
+	const selectedProfile = options.profile ?? 'balanced';
+	const adaptive =
+		options.adaptiveOptimization === false
+			? resolveAdaptiveProfile(selectedProfile, [])
+			: resolveAdaptiveProfile(selectedProfile, adaptiveRiskSignals(messages, options));
+	const activeOptions: LanguageModelWrapperOptions = {
+		...options,
+		profile: adaptive.effectiveProfile,
+	};
+	const compiledPrompt = compileSystemMessages(
+		messages,
+		options.compileSystemPrompt !== false,
+	);
+	const compiledMessages = compiledPrompt.messages;
 	const optimizedTools = toolSequence.hasToolData
-		? await optimizeToolResults(messages, options, new Set(toolSequence.completedResultIndexes))
-		: { messages, changed: false, metrics: emptyToolMetrics() };
+		? await optimizeToolResults(
+				compiledMessages,
+				activeOptions,
+				new Set(toolSequence.completedResultIndexes),
+			)
+		: { messages: compiledMessages, changed: false, metrics: emptyToolMetrics() };
 	const workingMessages = optimizedTools.messages;
 
-	const profile = resolveProfile(options.profile ?? 'balanced', options.custom);
+	const profile = resolveProfile(activeOptions.profile ?? 'balanced', options.custom);
 	const entries: MessageEntry[] = workingMessages.map((message, index) => {
 		const value = message as MessageLike;
 		return {
@@ -539,7 +693,7 @@ async function optimizeMessages(
 		entries,
 		structurallyProtected,
 		recentWindowStart,
-		options,
+		activeOptions,
 	);
 	for (const index of cachePolicy.protectedIndexes) structurallyProtected.add(index);
 	const acceptedRegularIndexes = new Set<number>();
@@ -578,6 +732,11 @@ async function optimizeMessages(
 					? estimateTokens(entries[entries.length - 1].text)
 					: 0,
 			},
+			adaptiveMetrics: {
+				profile: adaptive,
+				promptTokensBefore: compiledPrompt.tokensBefore,
+				promptTokensAfter: compiledPrompt.tokensAfter,
+			},
 		};
 	}
 	return {
@@ -596,6 +755,11 @@ async function optimizeMessages(
 				.filter((entry) => cachePolicy.dynamicIndexes.has(entry.index))
 				.reduce((total, entry) => total + estimateTokens(entry.text), 0),
 		},
+		adaptiveMetrics: {
+			profile: adaptive,
+			promptTokensBefore: compiledPrompt.tokensBefore,
+			promptTokensAfter: compiledPrompt.tokensAfter,
+		},
 	};
 }
 
@@ -606,6 +770,7 @@ function optimizationMetrics(
 	bypassReason?: ModelBypassReason,
 	toolMetrics = emptyToolMetrics(),
 	cacheMetrics = emptyCacheMetrics(),
+	adaptiveMetrics?: AdaptiveOptimizationMetrics,
 ): Omit<ModelOptimizationMetrics, 'operation'> {
 	const beforeText = before.map((message) => messageText(message as MessageLike)).join('\n');
 	const afterText = after.map((message) => messageText(message as MessageLike)).join('\n');
@@ -638,7 +803,8 @@ function optimizationMetrics(
 			'optimizeMessages' in options &&
 			(options as LanguageModelWrapperOptions).optimizeMessages === false
 				? 'measure_only'
-				: resolveProfile(options.profile ?? 'balanced', options.custom).name,
+				: (adaptiveMetrics?.profile.selectedProfile ??
+					resolveProfile(options.profile ?? 'balanced', options.custom).name),
 		messagesBefore: before.length,
 		messagesAfter: after.length,
 		tokensBeforeEstimated,
@@ -681,6 +847,21 @@ function optimizationMetrics(
 		...((options as LanguageModelWrapperOptions).cacheAware?.registryScope === 'worker_local'
 			? { cacheWarning: 'queue_mode_local_registry' as const }
 			: {}),
+		...(adaptiveMetrics
+			? {
+					selectedProfile: adaptiveMetrics.profile.selectedProfile,
+					effectiveProfile: adaptiveMetrics.profile.effectiveProfile,
+					adaptiveRiskLevel: adaptiveMetrics.profile.riskLevel,
+					adaptiveRiskSignals: adaptiveMetrics.profile.signals,
+					adaptiveDowngrade: adaptiveMetrics.profile.downgraded,
+					promptTokensBefore: adaptiveMetrics.promptTokensBefore,
+					promptTokensAfter: adaptiveMetrics.promptTokensAfter,
+					promptSavedTokens: Math.max(
+						0,
+						adaptiveMetrics.promptTokensBefore - adaptiveMetrics.promptTokensAfter,
+					),
+				}
+			: {}),
 		...(toolSelection
 			? {
 					toolSchemasBefore: toolSelection.totalTools,
@@ -703,16 +884,7 @@ async function optimizeModelInput(
 		'optimizeMessages' in options &&
 		(options as LanguageModelWrapperOptions).optimizeMessages === false
 	) {
-		const messages = Array.isArray(input)
-			? input
-			: input &&
-				  typeof input === 'object' &&
-				  'toChatMessages' in input &&
-				  typeof (input as { toChatMessages: unknown }).toChatMessages === 'function'
-				? (input as { toChatMessages: () => unknown[] }).toChatMessages()
-				: input === undefined || input === null
-					? []
-					: [input];
+		const messages = coerceMessages(input);
 		return {
 			input,
 			metrics: optimizationMetrics(messages, messages, options),
@@ -731,6 +903,7 @@ async function optimizeModelInput(
 				optimized.bypassReason,
 				optimized.toolMetrics,
 				optimized.cacheMetrics,
+				optimized.adaptiveMetrics,
 			),
 			cacheFingerprints: optimized.cacheFingerprints ?? [],
 			cacheMetrics: optimized.cacheMetrics ?? emptyCacheMetrics(),
@@ -753,6 +926,7 @@ async function optimizeModelInput(
 				optimized.bypassReason,
 				optimized.toolMetrics,
 				optimized.cacheMetrics,
+				optimized.adaptiveMetrics,
 			),
 			cacheFingerprints: optimized.cacheFingerprints ?? [],
 			cacheMetrics: optimized.cacheMetrics ?? emptyCacheMetrics(),
@@ -827,8 +1001,15 @@ function deferredToolBinding(
 			) {
 				return async (input: unknown, ...callArguments: unknown[]) => {
 					const configured = options.toolSelection;
+					const effectiveProfile =
+						options.adaptiveOptimization === false
+							? (options.profile ?? 'balanced')
+							: resolveAdaptiveProfile(
+									options.profile ?? 'balanced',
+									adaptiveRiskSignals(coerceMessages(input), options),
+								).effectiveProfile;
 					const selection = selectToolSchemas(tools, input, {
-						profile: options.profile ?? 'balanced',
+						profile: effectiveProfile,
 						mode:
 							options.cacheAware?.strategy === 'cache_priority'
 								? 'disabled'
@@ -900,6 +1081,26 @@ export function wrapLanguageModel<T extends object>(
 							undefined,
 							combineToolMetrics(optimized.map((entry) => entry.metrics)),
 							combineCacheMetrics(optimized.map((entry) => entry.cacheMetrics)),
+							combineAdaptiveMetrics(
+								optimized.map((entry) =>
+									entry.metrics.effectiveProfile
+										? {
+											profile: {
+												selectedProfile:
+													(entry.metrics.selectedProfile as AdaptiveProfileResult['selectedProfile']) ??
+													'balanced',
+												effectiveProfile: entry.metrics
+													.effectiveProfile as AdaptiveProfileResult['effectiveProfile'],
+												riskLevel: entry.metrics.adaptiveRiskLevel ?? 'low',
+												signals: entry.metrics.adaptiveRiskSignals ?? [],
+												downgraded: entry.metrics.adaptiveDowngrade ?? false,
+											},
+											promptTokensBefore: entry.metrics.promptTokensBefore ?? 0,
+											promptTokensAfter: entry.metrics.promptTokensAfter ?? 0,
+										}
+										: undefined,
+								),
+							),
 						),
 					};
 					return await observedCall('batch', combined, observer, options.cacheAware, async () =>
@@ -999,6 +1200,11 @@ export function wrapLanguageModel<T extends object>(
 							Array.isArray(optimizedGroups)
 								? combineCacheMetrics(
 										optimizedGroups.map((entry) => entry.cacheMetrics ?? emptyCacheMetrics()),
+									)
+								: undefined,
+							Array.isArray(optimizedGroups)
+								? combineAdaptiveMetrics(
+										optimizedGroups.map((entry) => entry.adaptiveMetrics),
 									)
 								: undefined,
 						),

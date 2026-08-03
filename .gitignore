@@ -6,3 +6,4 @@ coverage
 .env
 .env.*
 .n8n
+tmp/

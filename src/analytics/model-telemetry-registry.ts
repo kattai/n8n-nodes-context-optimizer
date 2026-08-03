@@ -13,6 +13,7 @@ export interface ModelTelemetryRecord {
 	executionId: string;
 	nodeName: string;
 	recordedAt: string;
+	calls?: number;
 	optimization: ModelOptimizationMetrics;
 	providerUsage: ProviderUsageTelemetry;
 }
@@ -62,6 +63,7 @@ function mergeRecords(
 	const targetBandReached = eligibleBefore > 0 && eligibleAfter / eligibleBefore <= 0.3;
 	return {
 		...current,
+		calls: (previous.calls ?? 1) + (current.calls ?? 1),
 		optimization: {
 			...current.optimization,
 			messagesBefore:
@@ -113,6 +115,30 @@ function mergeRecords(
 				(current.optimization.dynamicTokensAfter ?? 0),
 			bypassReason:
 				current.optimization.bypassReason ?? previous.optimization.bypassReason,
+			selectedProfile:
+				current.optimization.selectedProfile ?? previous.optimization.selectedProfile,
+			effectiveProfile:
+				current.optimization.effectiveProfile ?? previous.optimization.effectiveProfile,
+			adaptiveRiskLevel:
+				current.optimization.adaptiveRiskLevel ?? previous.optimization.adaptiveRiskLevel,
+			adaptiveRiskSignals: [
+				...new Set([
+					...(previous.optimization.adaptiveRiskSignals ?? []),
+					...(current.optimization.adaptiveRiskSignals ?? []),
+				]),
+			],
+			adaptiveDowngrade:
+				(previous.optimization.adaptiveDowngrade ?? false) ||
+				(current.optimization.adaptiveDowngrade ?? false),
+			promptTokensBefore:
+				(previous.optimization.promptTokensBefore ?? 0) +
+				(current.optimization.promptTokensBefore ?? 0),
+			promptTokensAfter:
+				(previous.optimization.promptTokensAfter ?? 0) +
+				(current.optimization.promptTokensAfter ?? 0),
+			promptSavedTokens:
+				(previous.optimization.promptSavedTokens ?? 0) +
+				(current.optimization.promptSavedTokens ?? 0),
 		},
 		providerUsage: {
 			inputTokens: sumOptional(
@@ -173,6 +199,13 @@ export function getModelTelemetry(
 ): ModelTelemetryRecord | undefined {
 	pruneRegistry();
 	return registry.get(executionId)?.get(nodeName);
+}
+
+export function getExecutionModelTelemetry(executionId: string): ModelTelemetryRecord[] {
+	pruneRegistry();
+	return [...(registry.get(executionId)?.values() ?? [])]
+		.map((record) => ({ ...record, calls: record.calls ?? 1 }))
+		.sort((left, right) => left.nodeName.localeCompare(right.nodeName));
 }
 
 export function clearExecutionTelemetry(executionId: string): void {

@@ -1,0 +1,26 @@
+{
+  "longContext": {
+    "before": 4572,
+    "after": 353,
+    "reductionPercent": 92.28,
+    "currentMessageExact": true,
+    "protectedFactsExact": true
+  },
+  "toolHeavy": {
+    "clearIntentReductionPercent": 85.56,
+    "selectedTools": [
+      "calendar_lookup",
+      "invoice_lookup"
+    ],
+    "ambiguousKeptAll": true,
+    "ambiguousReason": "structured_output_ambiguous"
+  },
+  "multiAgent": {
+    "before": 8350,
+    "after": 554,
+    "reductionPercent": 93.37,
+    "objectiveExact": true,
+    "factExact": true
+  },
+  "passed": true
+}

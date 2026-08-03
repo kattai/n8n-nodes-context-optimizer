@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import {
 	clearAllModelTelemetry,
 	clearExecutionTelemetry,
+	getExecutionModelTelemetry,
 	getModelTelemetry,
 	recordModelTelemetry,
 } from '../../src/analytics/model-telemetry-registry';
@@ -124,5 +125,48 @@ describe('model telemetry registry', () => {
 			retrievalRequired: true,
 			targetBandReached: true,
 		});
+		expect(aggregate?.calls).toBe(2);
+		expect(getExecutionModelTelemetry('exec-loop')).toHaveLength(1);
+	});
+
+	it('lists every optimized model in one execution without crossing executions', () => {
+		const template = {
+			recordedAt: new Date().toISOString(),
+			optimization: {
+				operation: 'invoke' as const,
+				profile: 'balanced',
+				messagesBefore: 1,
+				messagesAfter: 1,
+				tokensBeforeEstimated: 100,
+				tokensAfterEstimated: 50,
+				savingsTokensEstimated: 50,
+				savingsPercentEstimated: 50,
+				protectedFactsCount: 0,
+				tokensAreEstimated: true as const,
+				eligibleTokensBefore: 0,
+				eligibleTokensAfter: 0,
+				eligibleSavingsPercent: 0,
+				virtualizedResourceIds: [],
+				retrievalRequired: false,
+				targetBandReached: false,
+				storageFallbackUsed: false,
+				cacheStrategy: 'ignore_cache_signals' as const,
+				cacheDecision: 'legacy_profile_only' as const,
+				stablePrefixTokens: 0,
+				dynamicTokensBefore: 0,
+				dynamicTokensAfter: 0,
+				cacheRegistryScope: 'disabled' as const,
+			},
+			providerUsage: { available: false },
+		};
+		recordModelTelemetry({ ...template, executionId: 'one', nodeName: 'Agent B' });
+		recordModelTelemetry({ ...template, executionId: 'one', nodeName: 'Agent A' });
+		recordModelTelemetry({ ...template, executionId: 'two', nodeName: 'Agent C' });
+
+		expect(getExecutionModelTelemetry('one').map((record) => record.nodeName)).toEqual([
+			'Agent A',
+			'Agent B',
+		]);
+		expect(getExecutionModelTelemetry('two')).toHaveLength(1);
 	});
 });

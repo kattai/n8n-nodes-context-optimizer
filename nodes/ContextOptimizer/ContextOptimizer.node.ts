@@ -25,8 +25,15 @@ import type {
 } from '../../src/semantic/types';
 import {
 	defaultStorageDirectory,
-	FileSystemResourceStore,
 } from '../../src/storage/filesystem-store';
+import {
+	createConfiguredResourceStore,
+	type StorageCredentialValues,
+	type StorageProvider,
+} from '../../src/storage/configured-store';
+import { recordExecutionTelemetry } from '../../src/analytics/execution-telemetry-registry';
+import { buildIsolationScope } from '../../src/storage/isolation-scope';
+import { testContextSaverStorageApi } from '../../src/storage/credential-test';
 import { virtualizeContext } from '../../src/virtualization/context-virtualizer';
 import {
 	contentOutput,
@@ -49,6 +56,11 @@ interface VirtualizationNodeOptions {
 	scope?: string;
 	storageDirectory?: string;
 	maxResourceMegabytes?: number;
+	ownerId?: string;
+	storageProvider?: StorageProvider;
+	sessionId?: string;
+	redisKeyPrefix?: string;
+	encryptStorage?: boolean;
 }
 
 interface SemanticNodeOptions {
@@ -185,8 +197,10 @@ async function withTimeout<T>(
 }
 
 export class ContextOptimizer implements INodeType {
+	methods = { credentialTest: { testContextSaverStorageApi } };
+
 	description: INodeTypeDescription = {
-		displayName: 'Context Saver Content',
+		displayName: 'Data Optimizer',
 		name: 'contextOptimizer',
 		icon: {
 			light: 'file:context-optimizer.svg',
@@ -196,13 +210,13 @@ export class ContextOptimizer implements INodeType {
 		// @ts-expect-error n8n's public type currently omits the supported false value.
 		usableAsTool: false,
 		group: ['transform'],
-		version: [1, 2],
-		defaultVersion: 2,
+		version: [1, 2, 3],
+		defaultVersion: 3,
 		subtitle: '={{$parameter["operation"]}}',
 		description:
 			'Compress large data before adding it to an AI prompt; use for JSON, RAG, logs, HTML, or static prompts',
 		defaults: {
-			name: 'Context Saver Content',
+			name: 'Data Optimizer',
 		},
 		inputs: [
 			NodeConnectionTypes.Main,
@@ -214,6 +228,15 @@ export class ContextOptimizer implements INodeType {
 			},
 		],
 		outputs: [NodeConnectionTypes.Main],
+		credentials: [
+			{
+				name: 'contextSaverStorageApi',
+				required: false,
+				testedBy: 'testContextSaverStorageApi',
+				displayName: 'Storage and Encryption (Optional)',
+				displayOptions: { show: { '@version': [3] } },
+			},
+		],
 		properties: [
 			{
 				displayName: 'Operation',
@@ -424,7 +447,7 @@ export class ContextOptimizer implements INodeType {
 					show: { '@version': [1], operation: ['optimizeContent'] },
 				},
 				description:
-					'Whether to store large original content and return a smaller preview; connect Context Saver Retriever to the agent',
+					'Whether to store large original content and return a smaller preview; connect Exact Lookup to the agent',
 			},
 			{
 				displayName: 'Context Virtualization',
@@ -455,7 +478,7 @@ export class ContextOptimizer implements INodeType {
 				],
 				default: 'automatic',
 				displayOptions: {
-					show: { '@version': [2], operation: ['optimizeContent'] },
+					show: { '@version': [2, 3], operation: ['optimizeContent'] },
 				},
 				description: 'Controls when exact original content moves outside the model prompt',
 			},
@@ -538,7 +561,7 @@ export class ContextOptimizer implements INodeType {
 				default: {},
 				displayOptions: {
 					show: {
-						'@version': [2],
+						'@version': [2, 3],
 						operation: ['optimizeContent'],
 						virtualizationMode: ['automatic', 'required'],
 					},
@@ -551,6 +574,14 @@ export class ContextOptimizer implements INodeType {
 						default: false,
 						description:
 							'Whether secured storage may contain values resembling API keys, passwords, or private keys',
+					},
+					{
+						displayName: 'Encrypt Stored Content',
+						name: 'encryptStorage',
+						type: 'boolean',
+						default: false,
+						description:
+							'Whether to use the AES-256-GCM key from Context Saver Storage API credentials',
 					},
 					{
 						displayName: 'Maximum Preview Items',
@@ -578,11 +609,33 @@ export class ContextOptimizer implements INodeType {
 							'Automatic mode keeps smaller content inline because storage overhead may cost more',
 					},
 					{
+						displayName: 'Owner ID',
+						name: 'ownerId',
+						type: 'string',
+						default: '={{ $json.ownerId || $json.userId || "" }}',
+						description: 'Optional user or tenant boundary; must match Exact Lookup',
+					},
+					{
+						displayName: 'Redis Key Prefix',
+						name: 'redisKeyPrefix',
+						type: 'string',
+						default: 'context-saver',
+						description: 'Must match Exact Lookup',
+						displayOptions: { show: { storageProvider: ['redis'] } },
+					},
+					{
 						displayName: 'Scope',
 						name: 'scope',
 						type: 'string',
 						default: '={{ $workflow.id }}',
-						description: 'Isolation key that must match Context Saver Retriever',
+						description: 'Workflow isolation key that must match Exact Lookup',
+					},
+					{
+						displayName: 'Session ID',
+						name: 'sessionId',
+						type: 'string',
+						default: '={{ $json.sessionId || $json.sessionKey || "" }}',
+						description: 'Optional conversation boundary; must match Exact Lookup',
 					},
 					{
 						displayName: 'Storage Directory',
@@ -590,7 +643,28 @@ export class ContextOptimizer implements INodeType {
 						type: 'string',
 						default: '',
 						placeholder: defaultStorageDirectory(),
-						description: 'Shared self-hosted path also configured in Context Saver Retriever',
+						description: 'Shared self-hosted path also configured in Exact Lookup',
+					},
+					{
+						displayName: 'Storage Provider',
+						name: 'storageProvider',
+						type: 'options',
+						noDataExpression: true,
+						options: [
+							{
+								name: 'Local or Shared Filesystem',
+								value: 'filesystem',
+								description: 'Zero-credential storage; shared path required for queue workers',
+								action: 'Use filesystem storage',
+							},
+							{
+								name: 'Redis (High Concurrency)',
+								value: 'redis',
+								description: 'Shared TTL storage for many users and workers',
+								action: 'Use Redis storage',
+							},
+						],
+						default: 'filesystem',
 					},
 					{
 						displayName: 'TTL (Hours)',
@@ -645,10 +719,10 @@ export class ContextOptimizer implements INodeType {
 				name: 'profile',
 				type: 'options',
 				noDataExpression: true,
-				displayOptions: { show: { '@version': [2] } },
+				displayOptions: { show: { '@version': [2, 3] } },
 				options: [
 					{
-						name: 'Quality',
+						name: 'Quality First',
 						value: 'quality',
 						description:
 							'Typical eligible saving: 15–35%. Deterministic, reversible optimization with maximum fidelity.',
@@ -662,7 +736,7 @@ export class ContextOptimizer implements INodeType {
 						action: 'Balance fidelity and savings',
 					},
 					{
-						name: 'Savings',
+						name: 'Maximum Savings',
 						value: 'savings',
 						description:
 							'Typical eligible saving: 60–85%. Small task-aware previews with exact recovery for missing details.',
@@ -738,7 +812,7 @@ export class ContextOptimizer implements INodeType {
 				name: 'qualityLevel',
 				type: 'options',
 				noDataExpression: true,
-				displayOptions: { show: { '@version': [2] } },
+				displayOptions: { show: { '@version': [2, 3] } },
 				options: [
 					{
 						name: 'Fast',
@@ -792,7 +866,7 @@ export class ContextOptimizer implements INodeType {
 				placeholder: 'Add Experimental Setting',
 				default: {},
 				displayOptions: {
-					show: { '@version': [2], operation: ['buildAgentContext'], useSummarizer: [true] },
+					show: { '@version': [2, 3], operation: ['buildAgentContext'], useSummarizer: [true] },
 				},
 				description:
 					'Optional paid adapter calls; every stage is measured and falls back to deterministic context',
@@ -976,15 +1050,41 @@ export class ContextOptimizer implements INodeType {
 								: (virtualizationOptions.thresholdTokens ?? previewPolicy.thresholdTokens);
 						if (eligibleTokens > thresholdTokens) {
 							try {
-								const store = new FileSystemResourceStore(
-									virtualizationOptions.storageDirectory?.trim() || defaultStorageDirectory(),
-									(virtualizationOptions.maxResourceMegabytes ?? 10) * 1024 * 1024,
-								);
+								const storageProvider =
+									nodeVersion >= 3
+										? (virtualizationOptions.storageProvider ?? 'filesystem')
+										: 'filesystem';
+								const encryptStorage =
+									nodeVersion >= 3 && (virtualizationOptions.encryptStorage ?? false);
+								let storageCredentials: StorageCredentialValues = {};
+								if (storageProvider === 'redis' || encryptStorage) {
+									storageCredentials = (await this.getCredentials(
+										'contextSaverStorageApi',
+										itemIndex,
+									)) as StorageCredentialValues;
+								}
+								const store = createConfiguredResourceStore({
+									provider: storageProvider,
+									directory:
+										virtualizationOptions.storageDirectory?.trim() || defaultStorageDirectory(),
+									maxResourceBytes:
+										(virtualizationOptions.maxResourceMegabytes ?? 10) * 1024 * 1024,
+									encrypt: encryptStorage,
+									redisKeyPrefix:
+										virtualizationOptions.redisKeyPrefix?.trim() || 'context-saver',
+									credentials: storageCredentials,
+								});
 								const resource = await store.store({
 									content,
 									contentType: result.contentType,
 									ttlSeconds: (virtualizationOptions.ttlHours ?? 24) * 3600,
-									scope: virtualizationOptions.scope?.trim() || this.getWorkflow().id || 'workflow',
+									scope: buildIsolationScope(
+										virtualizationOptions.scope?.trim() ||
+											this.getWorkflow().id ||
+											'workflow',
+										nodeVersion >= 3 ? virtualizationOptions.sessionId : '',
+										nodeVersion >= 3 ? virtualizationOptions.ownerId : '',
+									),
 									recordCount: result.manifest.recordCount,
 									fields: result.manifest.fields,
 									allowSecretLikeContent: virtualizationOptions.allowSecretLikeContent ?? false,
@@ -1075,6 +1175,21 @@ export class ContextOptimizer implements INodeType {
 							outputDetail,
 						) as unknown as IDataObject,
 						pairedItem: { item: itemIndex },
+					});
+					recordExecutionTelemetry({
+						executionId: this.getExecutionId(),
+						nodeName: this.getNode().name,
+						component: 'data_optimizer',
+						recordedAt: new Date().toISOString(),
+						tokensBefore: result.tokens.original,
+						tokensAfter: result.tokens.optimized,
+						qualityFallbacks: result.quality.fallbackUsed ? 1 : 0,
+						selectedProfile: profile,
+						effectiveProfile: profile,
+						resourceIds:
+							typeof contextVirtualization.resourceId === 'string'
+								? [contextVirtualization.resourceId]
+								: [],
 					});
 					continue;
 				}
@@ -1210,6 +1325,20 @@ export class ContextOptimizer implements INodeType {
 				returnData.push({
 					json: contextOutput(result, outputDetail) as unknown as IDataObject,
 					pairedItem: { item: itemIndex },
+				});
+				recordExecutionTelemetry({
+					executionId: this.getExecutionId(),
+					nodeName: this.getNode().name,
+					component: 'data_optimizer',
+					recordedAt: new Date().toISOString(),
+					tokensBefore: result.optimization.tokensBefore,
+					tokensAfter: result.optimization.tokensAfter,
+					overheadTokens:
+						(result.optimization.compressorTokens ?? 0) +
+						(result.optimization.verificationTokens ?? 0),
+					qualityFallbacks: result.optimization.fallback ? 1 : 0,
+					selectedProfile: profile,
+					effectiveProfile: profile,
 				});
 			} catch (error) {
 				if (this.continueOnFail()) {

@@ -1,0 +1,89 @@
+{
+  "id": "contextSaverV1LocalRuntime",
+  "name": "[LAB] Context Saver 1.0 — Local Runtime",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "manual-trigger",
+      "name": "Run Local Test",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [-660, 0]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const records = Array.from({ length: 180 }, (_, index) => ({ id: 'SYN-' + String(index).padStart(3, '0'), status: index % 4 === 0 ? 'pending' : 'reviewed', amount: 100000 + index * 37, category: 'category-' + (index % 6), note: 'Generated fictional record for local testing only.' })); return [{ json: { sessionId: 'synthetic-session-1', ownerId: 'synthetic-user-1', content: JSON.stringify({ source: 'synthetic-local-test', records }) } }];"
+      },
+      "id": "generate-data",
+      "name": "Generate Fictional Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-440, 0]
+    },
+    {
+      "parameters": {
+        "operation": "optimizeContent",
+        "content": "={{ $json.content }}",
+        "contentType": "json",
+        "currentTask": "Find exact record SYN-091",
+        "protectedValues": "SYN-091",
+        "profile": "savings",
+        "virtualizationMode": "required",
+        "virtualizationOptionsV2": {
+          "scope": "synthetic-local-workflow",
+          "sessionId": "={{ $json.sessionId }}",
+          "ownerId": "={{ $json.ownerId }}",
+          "ttlHours": 1
+        },
+        "qualityLevel": "strict",
+        "outputDetail": "simple"
+      },
+      "id": "data-optimizer",
+      "name": "Data Optimizer",
+      "type": "n8n-nodes-context-optimizer.contextOptimizer",
+      "typeVersion": 3,
+      "position": [-180, 0]
+    },
+    {
+      "parameters": {
+        "objective": "Find exact fictional record SYN-091.",
+        "fromAgent": "Synthetic Collector",
+        "toAgent": "Synthetic Analyst",
+        "confirmedFacts": "={{ [\"SYN-091 is the requested record\"] }}",
+        "decisions": "={{ [\"Use exact lookup when preview lacks the value\"] }}",
+        "pendingActions": "={{ [\"Read the exact amount\"] }}",
+        "resourceIds": "={{ [$json.contextResource.resourceId] }}",
+        "sourceOutput": "={{ $json.optimizedContent }}",
+        "profile": "balanced"
+      },
+      "id": "agent-handoff",
+      "name": "Agent Handoff",
+      "type": "n8n-nodes-context-optimizer.agentHandoff",
+      "typeVersion": 1,
+      "position": [80, 0]
+    },
+    {
+      "parameters": {
+        "operation": "currentExecution",
+        "outputDetail": "detailed"
+      },
+      "id": "savings-report",
+      "name": "Savings Report",
+      "type": "n8n-nodes-context-optimizer.tokenAnalytics",
+      "typeVersion": 3,
+      "position": [340, 0]
+    }
+  ],
+  "connections": {
+    "Run Local Test": { "main": [[{ "node": "Generate Fictional Data", "type": "main", "index": 0 }]] },
+    "Generate Fictional Data": { "main": [[{ "node": "Data Optimizer", "type": "main", "index": 0 }]] },
+    "Data Optimizer": { "main": [[{ "node": "Agent Handoff", "type": "main", "index": 0 }]] },
+    "Agent Handoff": { "main": [[{ "node": "Savings Report", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" },
+  "meta": { "templateCredsSetupCompleted": true },
+  "tags": []
+}

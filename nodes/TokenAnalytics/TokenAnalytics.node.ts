@@ -14,7 +14,14 @@ import {
 	type TokenAnalysis,
 	type TokenPricing,
 } from '../../src/analytics/token-analytics';
-import { getModelTelemetry } from '../../src/analytics/model-telemetry-registry';
+import {
+	getExecutionModelTelemetry,
+	getModelTelemetry,
+} from '../../src/analytics/model-telemetry-registry';
+import {
+	getExecutionTelemetry,
+	summarizeExecutionTelemetry,
+} from '../../src/analytics/execution-telemetry-registry';
 import {
 	analysisOutput,
 	modelComparisonOutput,
@@ -25,6 +32,7 @@ type AnalyticsOperation =
 	| 'analyze'
 	| 'compare'
 	| 'compareCurrentExecution'
+	| 'currentExecution'
 	| 'aggregate'
 	| 'estimateCost';
 
@@ -39,7 +47,7 @@ function parseObject(value: unknown): unknown {
 
 export class TokenAnalytics implements INodeType {
 	description: INodeTypeDescription = {
-		displayName: 'Context Saver Metrics',
+		displayName: 'Savings Report',
 		name: 'tokenAnalytics',
 		icon: {
 			light: 'file:token-analytics.svg',
@@ -48,12 +56,12 @@ export class TokenAnalytics implements INodeType {
 		// @ts-expect-error n8n's public type currently omits the supported false value.
 		usableAsTool: false,
 		group: ['transform'],
-		version: [1, 2],
-		defaultVersion: 2,
+		version: [1, 2, 3],
+		defaultVersion: 3,
 		subtitle: '={{$parameter["operation"]}}',
 		description:
 			'Show eligible, full-request, provider, and net savings after Context Saver nodes or A/B model comparisons',
-		defaults: { name: 'Context Saver Metrics' },
+		defaults: { name: 'Savings Report' },
 		inputs: [NodeConnectionTypes.Main],
 		outputs: [NodeConnectionTypes.Main],
 		properties: [
@@ -72,7 +80,7 @@ export class TokenAnalytics implements INodeType {
 					{
 						name: 'Analyze Savings',
 						value: 'analyze',
-						description: 'Use after Context Saver Content or with normalized token fields',
+						description: 'Use after Data Optimizer or with normalized token fields',
 						action: 'Analyze an item',
 					},
 					{
@@ -89,31 +97,38 @@ export class TokenAnalytics implements INodeType {
 						action: 'Compare runs',
 					},
 					{
+						name: 'Current Execution (Recommended)',
+						value: 'currentExecution',
+						description:
+							'Automatically total every Agent Optimizer call made in this workflow execution',
+						action: 'Report current execution savings',
+					},
+					{
 						name: 'Estimate Cost',
 						value: 'estimateCost',
 						description: 'Apply provider prices to token measurements; does not call the provider',
 						action: 'Estimate cost',
 					},
 				],
-				default: 'analyze',
+				default: 'currentExecution',
 			},
 			{
 				displayName: 'Baseline Model Wrapper',
 				name: 'baselineModelNode',
 				type: 'string',
 				required: true,
-				default: 'Context Saver Model — Baseline',
+				default: 'Agent Optimizer — Baseline',
 				displayOptions: { show: { operation: ['compareCurrentExecution'] } },
-				description: 'Exact node name of a Context Saver Model configured as Measure Baseline',
+				description: 'Exact node name of an Agent Optimizer configured as Measure Baseline',
 			},
 			{
 				displayName: 'Optimized Model Wrapper',
 				name: 'optimizedModelNode',
 				type: 'string',
 				required: true,
-				default: 'Context Saver Model — Balanced',
+				default: 'Agent Optimizer — Balanced',
 				displayOptions: { show: { operation: ['compareCurrentExecution'] } },
-				description: 'Exact node name of a Context Saver Model configured as Save Tokens',
+				description: 'Exact node name of an Agent Optimizer configured as Save Tokens',
 			},
 			{
 				displayName: 'Metrics',
@@ -220,6 +235,83 @@ export class TokenAnalytics implements INodeType {
 		const outputDetail = this.getNodeParameter('outputDetail', 0, 'simple') as OutputDetail;
 
 		try {
+			if (operation === 'currentExecution') {
+				const executionId = this.getExecutionId();
+				const records = getExecutionModelTelemetry(executionId);
+				const optimizedRecords = records.filter(
+					(record) => record.optimization.profile !== 'measure_only',
+				);
+				const componentRecords = getExecutionTelemetry(executionId);
+				if (optimizedRecords.length === 0 && componentRecords.length === 0) {
+					throw new NodeOperationError(
+						this.getNode(),
+						'No Context Saver telemetry found in this execution. Connect this node after the optimized path.',
+					);
+				}
+				const analytics =
+					optimizedRecords.length > 0 ? aggregateMeasurements(optimizedRecords) : undefined;
+				const simple = analytics ? analysisOutput(analytics) : undefined;
+				const componentSummary = summarizeExecutionTelemetry(componentRecords);
+				const modelSavings = (simple?.tokenSavings ?? {}) as Record<string, unknown>;
+				const modelBefore = Number(modelSavings.before ?? 0);
+				const modelSaved = Number(modelSavings.saved ?? 0);
+				const pipelineBefore =
+					optimizedRecords.length > 0
+						? modelBefore + componentSummary.grossSavedTokens
+						: componentSummary.tokensBefore;
+				const pipelineSaved = modelSaved + componentSummary.netSavedTokens;
+				const pipelineAfter = Math.max(0, pipelineBefore - pipelineSaved);
+				const perAgent = optimizedRecords.map((record) => {
+					const analysis = analyzeTokens(record);
+					return {
+						node: record.nodeName,
+						calls: record.calls ?? 1,
+						profile: record.optimization.profile,
+						before: analysis.scopes.fullRequest.before,
+						after: analysis.scopes.fullRequest.after,
+						saved: analysis.scopes.net.saved,
+						savedPercent: analysis.scopes.net.percent,
+						providerMeasured: analysis.actual.available,
+					};
+				});
+				return [
+					items.map((_, itemIndex) => ({
+						json: {
+							tokenSavings: {
+								before: pipelineBefore,
+								after: pipelineAfter,
+								saved: pipelineSaved,
+								percent:
+									pipelineBefore === 0
+										? 0
+										: Number(((pipelineSaved / pipelineBefore) * 100).toFixed(2)),
+								measurement: optimizedRecords.some((record) => record.providerUsage.available)
+									? 'provider_and_estimated'
+									: 'estimated',
+								qualityPassed: componentSummary.qualityFallbacks === 0,
+							},
+							agentsMeasured: optimizedRecords.length,
+							callsMeasured: optimizedRecords.reduce(
+								(total, record) => total + (record.calls ?? 1),
+								0,
+							),
+							perAgent: perAgent as unknown as IDataObject[],
+							componentSavings: componentSummary as unknown as IDataObject,
+							...(outputDetail === 'detailed'
+								? {
+									modelTelemetry: optimizedRecords as unknown as IDataObject[],
+									componentTelemetry: componentRecords as unknown as IDataObject[],
+									...(analytics
+										? { tokenAnalytics: analytics as unknown as IDataObject }
+										: {}),
+								}
+								: {}),
+						},
+						pairedItem: { item: itemIndex },
+					})),
+				];
+			}
+
 			if (operation === 'compareCurrentExecution') {
 				const executionId = this.getExecutionId();
 				const baselineNodeName = this.getNodeParameter('baselineModelNode', 0) as string;

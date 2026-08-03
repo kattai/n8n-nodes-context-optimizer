@@ -9,13 +9,20 @@ import { NodeConnectionTypes, NodeOperationError } from 'n8n-workflow';
 import type { DetectedContentType } from '../../src/content/types';
 import {
 	defaultStorageDirectory,
-	FileSystemResourceStore,
 } from '../../src/storage/filesystem-store';
+import {
+	createConfiguredResourceStore,
+	type StorageCredentialValues,
+	type StorageProvider,
+} from '../../src/storage/configured-store';
 import {
 	inspectReceipt,
 	type OutputDetail,
 	storeReceipt,
 } from '../../src/output/format-node-output';
+import { recordExecutionTelemetry } from '../../src/analytics/execution-telemetry-registry';
+import { buildIsolationScope } from '../../src/storage/isolation-scope';
+import { testContextSaverStorageApi } from '../../src/storage/credential-test';
 
 type ContextStoreOperation = 'store' | 'inspect' | 'delete' | 'purgeExpired';
 
@@ -27,8 +34,10 @@ function list(value: string): string[] {
 }
 
 export class ContextStore implements INodeType {
+	methods = { credentialTest: { testContextSaverStorageApi } };
+
 	description: INodeTypeDescription = {
-		displayName: 'Context Saver Store',
+		displayName: 'Context Storage',
 		name: 'contextStore',
 		icon: {
 			light: 'file:context-store.svg',
@@ -37,15 +46,46 @@ export class ContextStore implements INodeType {
 		// @ts-expect-error n8n's public type currently omits the supported false value.
 		usableAsTool: false,
 		group: ['transform'],
-		version: [1, 2],
-		defaultVersion: 2,
+		version: [1, 2, 3],
+		defaultVersion: 3,
 		subtitle: '={{$parameter["operation"]}}',
 		description:
-			'Keep large original data outside the AI prompt so Context Saver Retriever can recover exact details',
-		defaults: { name: 'Context Saver Store' },
+			'Keep large original data outside the AI prompt so Exact Lookup can recover exact details',
+		defaults: { name: 'Context Storage' },
 		inputs: [NodeConnectionTypes.Main],
 		outputs: [NodeConnectionTypes.Main],
+		credentials: [
+			{
+				name: 'contextSaverStorageApi',
+				required: false,
+				testedBy: 'testContextSaverStorageApi',
+				displayName: 'Storage and Encryption (Optional)',
+				displayOptions: { show: { '@version': [3] } },
+			},
+		],
 		properties: [
+			{
+				displayName: 'Storage Provider',
+				name: 'storageProvider',
+				type: 'options',
+				noDataExpression: true,
+				options: [
+					{
+						name: 'Local or Shared Filesystem (Recommended to Start)',
+						value: 'filesystem',
+						description: 'No credentials; use a shared path when n8n has multiple workers',
+						action: 'Store on filesystem',
+					},
+					{
+						name: 'Redis (High Concurrency)',
+						value: 'redis',
+						description: 'Shared TTL storage for queue mode and many simultaneous sessions',
+						action: 'Store in Redis',
+					},
+				],
+				default: 'filesystem',
+				displayOptions: { show: { '@version': [3] } },
+			},
 			{
 				displayName: 'Operation',
 				name: 'operation',
@@ -123,7 +163,27 @@ export class ContextStore implements INodeType {
 				required: true,
 				default: '={{ $workflow.id }}',
 				displayOptions: { show: { operation: ['store', 'inspect', 'delete'] } },
-				description: 'Isolation key; use the same value in Context Saver Retriever',
+				description: 'Workflow isolation key; use the same value in Exact Lookup',
+			},
+			{
+				displayName: 'Session ID',
+				name: 'sessionId',
+				type: 'string',
+				default: '={{ $json.sessionId || $json.sessionKey || "" }}',
+				displayOptions: {
+					show: { '@version': [3], operation: ['store', 'inspect', 'delete'] },
+				},
+				description: 'Optional conversation boundary; must match Exact Lookup',
+			},
+			{
+				displayName: 'Owner ID',
+				name: 'ownerId',
+				type: 'string',
+				default: '={{ $json.ownerId || $json.userId || "" }}',
+				displayOptions: {
+					show: { '@version': [3], operation: ['store', 'inspect', 'delete'] },
+				},
+				description: 'Optional user or tenant boundary; must match Exact Lookup',
 			},
 			{
 				displayName: 'Fields',
@@ -160,6 +220,23 @@ export class ContextStore implements INodeType {
 				placeholder: defaultStorageDirectory(),
 				description:
 					'Self-hosted storage path; empty uses the n8n user folder and must match the Retriever',
+			},
+			{
+				displayName: 'Redis Key Prefix',
+				name: 'redisKeyPrefix',
+				type: 'string',
+				default: 'context-saver',
+				description: 'Namespace used to isolate this package from other Redis data',
+				displayOptions: { show: { '@version': [3], storageProvider: ['redis'] } },
+			},
+			{
+				displayName: 'Encrypt Stored Content',
+				name: 'encryptStorage',
+				type: 'boolean',
+				default: false,
+				description:
+					'Whether to encrypt content with AES-256-GCM using the key in Context Saver Storage API credentials',
+				displayOptions: { show: { '@version': [3] } },
 			},
 			{
 				displayName: 'Maximum Resource Size (MB)',
@@ -226,9 +303,43 @@ export class ContextStore implements INodeType {
 					itemIndex,
 					10,
 				) as number;
-				const store = new FileSystemResourceStore(
-					configuredDirectory.trim() || defaultStorageDirectory(),
-					maximumMegabytes * 1024 * 1024,
+				const provider = this.getNodeParameter(
+					'storageProvider',
+					itemIndex,
+					'filesystem',
+				) as StorageProvider;
+				const encryptStorage = this.getNodeParameter(
+					'encryptStorage',
+					itemIndex,
+					false,
+				) as boolean;
+				let credentials: StorageCredentialValues = {};
+				if (this.getNode().typeVersion >= 3 && (provider === 'redis' || encryptStorage)) {
+					credentials = (await this.getCredentials(
+						'contextSaverStorageApi',
+						itemIndex,
+					)) as StorageCredentialValues;
+				}
+				const store = createConfiguredResourceStore({
+					provider: this.getNode().typeVersion >= 3 ? provider : 'filesystem',
+					directory: configuredDirectory.trim() || defaultStorageDirectory(),
+					maxResourceBytes: maximumMegabytes * 1024 * 1024,
+					encrypt: this.getNode().typeVersion >= 3 && encryptStorage,
+					redisKeyPrefix: this.getNodeParameter(
+						'redisKeyPrefix',
+						itemIndex,
+						'context-saver',
+					) as string,
+					credentials,
+				});
+				const scope = buildIsolationScope(
+					this.getNodeParameter('scope', itemIndex, this.getWorkflow().id) as string,
+					this.getNode().typeVersion >= 3
+						? (this.getNodeParameter('sessionId', itemIndex, '') as string)
+						: '',
+					this.getNode().typeVersion >= 3
+						? (this.getNodeParameter('ownerId', itemIndex, '') as string)
+						: '',
 				);
 
 				let result: IDataObject;
@@ -242,7 +353,7 @@ export class ContextStore implements INodeType {
 							'text',
 						) as DetectedContentType,
 						ttlSeconds: (this.getNodeParameter('ttlHours', itemIndex, 24) as number) * 3600,
-						scope: this.getNodeParameter('scope', itemIndex, this.getWorkflow().id) as string,
+						scope,
 						fields: list(this.getNodeParameter('fields', itemIndex, '') as string),
 						...(recordCount > 0 ? { recordCount } : {}),
 						allowSecretLikeContent: this.getNodeParameter(
@@ -256,7 +367,6 @@ export class ContextStore implements INodeType {
 						result.resource = manifest as unknown as IDataObject;
 					}
 				} else if (operation === 'inspect') {
-					const scope = this.getNodeParameter('scope', itemIndex, this.getWorkflow().id) as string;
 					const manifest = await store.inspect(
 						this.getNodeParameter('resourceId', itemIndex) as string,
 						scope,
@@ -267,7 +377,6 @@ export class ContextStore implements INodeType {
 					}
 				} else if (operation === 'delete') {
 					const resourceId = this.getNodeParameter('resourceId', itemIndex) as string;
-					const scope = this.getNodeParameter('scope', itemIndex, this.getWorkflow().id) as string;
 					await store.inspect(resourceId, scope);
 					result = { resourceId, deleted: await store.delete(resourceId, scope) };
 				} else {
@@ -277,6 +386,14 @@ export class ContextStore implements INodeType {
 				returnData.push({
 					json: result,
 					pairedItem: { item: itemIndex },
+				});
+				recordExecutionTelemetry({
+					executionId: this.getExecutionId(),
+					nodeName: this.getNode().name,
+					component: 'context_storage',
+					recordedAt: new Date().toISOString(),
+					resourceIds: typeof result.resourceId === 'string' ? [result.resourceId] : [],
+					diagnostics: [operation],
 				});
 			} catch (error) {
 				if (this.continueOnFail()) {

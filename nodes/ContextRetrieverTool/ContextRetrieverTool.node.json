@@ -1,8 +1,8 @@
 {
 	"node": "n8n-nodes-context-optimizer.contextRetrieverTool",
-	"nodeVersion": "2.0",
+	"nodeVersion": "3.0",
 	"codexVersion": "1.0",
-	"details": "Context Saver Retriever gives AI Agents compact, evidence-based, paged access to exact values and records stored outside their prompt.",
+	"details": "Exact Lookup gives AI Agents compact, evidence-based, paged access to exact values and records stored outside their prompt.",
 	"categories": ["AI"],
 	"resources": {
 		"primaryDocumentation": [

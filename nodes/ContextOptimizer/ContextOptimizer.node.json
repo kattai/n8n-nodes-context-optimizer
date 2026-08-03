@@ -1,8 +1,8 @@
 {
 	"node": "n8n-nodes-context-optimizer.contextOptimizer",
-	"nodeVersion": "2.0",
+	"nodeVersion": "3.0",
 	"codexVersion": "1.0",
-	"details": "Context Saver Content safely optimizes JSON, API responses, logs, HTML, RAG, tool output, conversations, and static prompts before AI use.",
+	"details": "Data Optimizer safely compresses JSON, API responses, logs, HTML, RAG, tool output, conversations, and static prompts before AI use.",
 	"categories": ["Data & Transformation"],
 	"resources": {
 		"primaryDocumentation": [

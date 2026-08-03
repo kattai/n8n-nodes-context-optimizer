@@ -1,6 +1,6 @@
 {
 	"name": "n8n-nodes-context-optimizer",
-	"version": "0.9.1",
+	"version": "1.0.0-rc.1",
 	"description": "Provider-neutral n8n nodes that reduce AI Agent input tokens with quality guards and exact retrieval.",
 	"license": "MIT",
 	"homepage": "https://github.com/kattai/n8n-nodes-context-optimizer",
@@ -27,18 +27,28 @@
 		"benchmark:profiles": "npm run build && node scripts/run-profile-v2-benchmark.mjs",
 		"benchmark:v0.8": "npm run build && node scripts/run-v0.8-benchmark.mjs",
 		"benchmark:v0.9": "npm run build && node scripts/run-v0.9-benchmark.mjs",
+		"benchmark:v1": "npm run build && node scripts/run-v1-boss-benchmark.mjs",
+		"benchmark:regression": "npm run benchmark:profiles && npm run benchmark:v1",
 		"check": "npm run test && npm run build && npm run lint",
+		"check:local": "npm run test && npm run benchmark:regression && npm run lint",
 		"release": "n8n-node release",
 		"prepublishOnly": "n8n-node prerelease"
 	},
 	"files": [
-		"dist"
+		"dist/**/*.d.ts",
+		"dist/**/*.js",
+		"dist/**/*.json",
+		"dist/**/*.map",
+		"dist/**/*.svg"
 	],
 	"n8n": {
 		"n8nNodesApiVersion": 1,
 		"strict": false,
-		"credentials": [],
+		"credentials": [
+			"dist/credentials/ContextSaverStorageApi.credentials.js"
+		],
 		"nodes": [
+			"dist/nodes/AgentHandoff/AgentHandoff.node.js",
 			"dist/nodes/ContextOptimizer/ContextOptimizer.node.js",
 			"dist/nodes/ContextMemory/ContextMemory.node.js",
 			"dist/nodes/ContextRetrieverTool/ContextRetrieverTool.node.js",
@@ -61,6 +71,7 @@
 	},
 	"dependencies": {
 		"@langchain/core": "1.1.34",
+		"redis": "^5.12.1",
 		"zod": "3.25.67"
 	}
 }

@@ -181,11 +181,13 @@ describe('wrapLanguageModel', () => {
 
 		expect(state.invocations).toHaveLength(1);
 		expect(state.invocations[0].toolNames).toContain('calendar_lookup');
-		expect(state.invocations[0].toolNames.length).toBeLessThan(tools.length);
+		expect(state.invocations[0].toolNames.length).toBe(tools.length);
 		expect(metrics[0]).toMatchObject({
 			toolSchemasBefore: 4,
-			toolSchemasAfter: expect.any(Number),
-			toolSchemaSelectionReason: 'selected',
+			toolSchemasAfter: 4,
+			toolSchemaSelectionReason: 'disabled',
+			effectiveProfile: 'balanced',
+			adaptiveDowngrade: true,
 		});
 	});
 

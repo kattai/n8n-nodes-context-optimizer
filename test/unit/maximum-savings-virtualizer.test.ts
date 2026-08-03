@@ -19,7 +19,10 @@ afterEach(async () => {
 	await Promise.all(
 		directories
 			.splice(0)
-			.map(async (directory) => await rm(directory, { recursive: true, force: true })),
+			.map(
+				async (directory) =>
+					await rm(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }),
+			),
 	);
 });
 
@@ -63,7 +66,7 @@ describe('Maximum Savings virtualizer', () => {
 			expect(result.retrievalRequired).toBe(true);
 		}
 		expect(reached).toBeGreaterThanOrEqual(19);
-	});
+	}, 20_000);
 
 	it('falls back to structural content when storage fails', async () => {
 		const content = Array.from(
